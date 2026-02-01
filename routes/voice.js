@@ -16,28 +16,11 @@ async function extractWithAI(text) {
         messages: [
           {
             role: 'system',
-            content: `You are a food order assistant. Extract food items and ALWAYS translate them to English.
+            content: `Extract food/drink items in English. If NO food/drink found, return: NOT_FOOD_RELATED
 
-IMPORTANT: Always return the ENGLISH name of the food, never the original language.
+Rules: Translate to English, space-separate items, ignore filler words.
 
-Rules:
-- Extract only food/drink items
-- ALWAYS translate to English (frites→fries, بيتزا→pizza, riz→rice, poulet→chicken)
-- Keep specific dish names in English (e.g., "margherita pizza", "chicken biryani")
-- Remove filler words and non-food words
-- Separate multiple items with spaces
-- Return empty string if no food items
-
-Examples:
-"frites" → "fries"
-"Je veux des frites et un burger" → "fries burger"
-"أريد بيتزا وبرجر" → "pizza burger"
-"دجاج مشوي" → "grilled chicken"
-"poulet roti avec du riz" → "roast chicken rice"
-"I want pepperoni pizza" → "pepperoni pizza"
-"sushi et ramen" → "sushi ramen"
-"مكرونة" → "pasta"
-"بطاطس مقلية" → "fries"`
+Examples: "frites"→fries | "أريد بيتزا"→pizza | "poulet avec riz"→chicken rice | "what's the weather"→NOT_FOOD_RELATED | "مرحبا"→NOT_FOOD_RELATED`
           },
           {
             role: 'user',
@@ -64,6 +47,43 @@ Examples:
   }
 }
 
+// Generate "not food related" message in the user's language
+async function generateNotFoodMessage(language) {
+  const defaultMessage = "Your request doesn't seem to be about food. Please ask about food items you'd like to search for.";
+
+  if (language === 'en') {
+    return defaultMessage;
+  }
+
+  try {
+    const response = await axios.post(
+      'https://api.groq.com/openai/v1/chat/completions',
+      {
+        model: 'llama-3.1-8b-instant',
+        messages: [
+          {
+            role: 'user',
+            content: `Translate to ${LANGUAGE_NAMES[language] || language} (only output translation): ${defaultMessage}`
+          }
+        ],
+        temperature: 0.1,
+        max_tokens: 150
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${GROQ_API_KEY}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    return response.data.choices[0]?.message?.content?.trim() || defaultMessage;
+  } catch (error) {
+    console.error('Translation error for not food message:', error.message);
+    return defaultMessage;
+  }
+}
+
 // Language name mapping for TTS responses
 const LANGUAGE_NAMES = {
   en: 'English', ar: 'Arabic', fr: 'French', es: 'Spanish', de: 'German',
@@ -85,12 +105,8 @@ async function generateSearchMessage(searchQuery, language) {
         model: 'llama-3.1-8b-instant',
         messages: [
           {
-            role: 'system',
-            content: `Translate the following phrase to ${LANGUAGE_NAMES[language] || language}. Return ONLY the translation, nothing else.`
-          },
-          {
             role: 'user',
-            content: `Searching for ${searchQuery}`
+            content: `Translate to ${LANGUAGE_NAMES[language] || language} (only output translation): Searching for ${searchQuery}`
           }
         ],
         temperature: 0.1,
@@ -133,6 +149,23 @@ router.post('/', async (req, res) => {
     // Try AI extraction first if enabled
     if (useAI) {
       const aiResult = await extractWithAI(text);
+
+      // Check if the request is not food related
+      if (aiResult === 'NOT_FOOD_RELATED') {
+        const notFoodMessage = await generateNotFoodMessage(language);
+        return res.json({
+          search_terms: [],
+          search_query: '',
+          search_message: notFoodMessage,
+          language,
+          original_text: text,
+          validated: false,
+          result_count: 0,
+          ai_extracted: true,
+          not_food_related: true
+        });
+      }
+
       if (aiResult) {
         search_query = aiResult;
         search_terms = aiResult.split(/\s+/).filter(w => w.length > 0);
