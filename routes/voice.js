@@ -16,21 +16,28 @@ async function extractWithAI(text) {
         messages: [
           {
             role: 'system',
-            content: `You are a food order assistant. Extract ONLY the food/drink items from the user's message.
+            content: `You are a food order assistant. Extract food items and ALWAYS translate them to English.
+
+IMPORTANT: Always return the ENGLISH name of the food, never the original language.
+
 Rules:
-- Return ONLY the food keywords in English, nothing else
-- Translate non-English food names to English if possible (e.g., "بيتزا" → "pizza")
-- Keep specific dish names (e.g., "margherita pizza", "chicken biryani")
-- Remove filler words, greetings, and non-food words
-- If multiple items, separate with spaces
-- If no food items found, return empty string
+- Extract only food/drink items
+- ALWAYS translate to English (frites→fries, بيتزا→pizza, riz→rice, poulet→chicken)
+- Keep specific dish names in English (e.g., "margherita pizza", "chicken biryani")
+- Remove filler words and non-food words
+- Separate multiple items with spaces
+- Return empty string if no food items
 
 Examples:
-"I want to order a large pepperoni pizza" → "pepperoni pizza"
-"Can I get some chicken shawarma and hummus" → "chicken shawarma hummus"
+"frites" → "fries"
+"Je veux des frites et un burger" → "fries burger"
 "أريد بيتزا وبرجر" → "pizza burger"
-"Je voudrais commander des sushis" → "sushi"
-"मुझे बिरयानी चाहिए" → "biryani"`
+"دجاج مشوي" → "grilled chicken"
+"poulet roti avec du riz" → "roast chicken rice"
+"I want pepperoni pizza" → "pepperoni pizza"
+"sushi et ramen" → "sushi ramen"
+"مكرونة" → "pasta"
+"بطاطس مقلية" → "fries"`
           },
           {
             role: 'user',
