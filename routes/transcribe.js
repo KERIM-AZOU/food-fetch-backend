@@ -5,6 +5,29 @@ const router = express.Router();
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
+// Common Whisper hallucinations to filter out (happens with silence/noise)
+const HALLUCINATION_PATTERNS = [
+  /^i'?m ready to translate\.?$/i,
+  /^thanks for watching\.?$/i,
+  /^thank you for watching\.?$/i,
+  /^subscribe\.?$/i,
+  /^please subscribe\.?$/i,
+  /^like and subscribe\.?$/i,
+  /^see you (next time|later)\.?$/i,
+  /^bye\.?$/i,
+  /^goodbye\.?$/i,
+  /^thank you\.?$/i,
+  /^you$/i,
+  /^\s*$/,  // Empty or whitespace only
+];
+
+function isHallucination(text) {
+  if (!text) return true;
+  const trimmed = text.trim();
+  if (trimmed.length < 2) return true;
+  return HALLUCINATION_PATTERNS.some(pattern => pattern.test(trimmed));
+}
+
 // POST /api/transcribe
 // Accepts audio as base64 in JSON body
 router.post('/', async (req, res) => {
@@ -46,9 +69,18 @@ router.post('/', async (req, res) => {
     );
 
     const detectedLanguage = response.data.language || 'en';
-    console.log('Transcription result:', response.data.text, '| Language:', detectedLanguage);
+    const rawText = response.data.text || '';
+
+    // Filter out Whisper hallucinations (common with silence/background noise)
+    if (isHallucination(rawText)) {
+      console.log('Filtered hallucination:', rawText);
+      res.json({ text: '', language: detectedLanguage });
+      return;
+    }
+
+    console.log('Transcription result:', rawText, '| Language:', detectedLanguage);
     res.json({
-      text: response.data.text || '',
+      text: rawText,
       language: detectedLanguage
     });
 
