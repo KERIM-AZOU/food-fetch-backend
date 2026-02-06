@@ -1,22 +1,27 @@
 const express = require('express');
 const router = express.Router();
 const axios = require('axios');
-const { isGeminiEnabled, textToSpeech: geminiTTS, transcribeAudio } = require('../services/gemini');
+const FormData = require('form-data');
+const { isGeminiEnabled, textToSpeech: geminiTTS, transcribeAudio: geminiTranscribe } = require('../services/gemini');
 
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
-const DEFAULT_VOICE_ID = '21m00Tcm4TlvDq8ikWAM';
+const GROQ_API_KEY = process.env.GROQ_API_KEY;
+const VOICE_ID = 'EXAVITQu4vr4xnSDxMaL'; // Bella (warm, friendly — free tier)
+// const ERYN_VOICE_ID = 'dj3G1R1ilKoFKhBnWOzG'; // Eryn (friendly — requires creator tier)
+// const RACHEL_VOICE_ID = '21m00Tcm4TlvDq8ikWAM'; // Rachel (calm/neutral — free tier)
 
-// ElevenLabs TTS (higher limits than Gemini TTS)
+// ElevenLabs TTS with Eryn voice (friendly, conversational)
 async function elevenLabsTTS(text) {
   if (!ELEVENLABS_API_KEY) return null;
 
   try {
+    const start = Date.now();
     const response = await axios.post(
-      `https://api.elevenlabs.io/v1/text-to-speech/${DEFAULT_VOICE_ID}`,
+      `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`,
       {
         text,
         model_id: 'eleven_multilingual_v2',
-        voice_settings: { stability: 0.5, similarity_boost: 0.75 }
+        voice_settings: { stability: 0.3, similarity_boost: 0.8, style: 0.75 }
       },
       {
         headers: {
@@ -28,37 +33,72 @@ async function elevenLabsTTS(text) {
         timeout: 15000
       }
     );
+    console.log(`[TIMING] ElevenLabs TTS — ${Date.now() - start}ms`);
     return {
       data: Buffer.from(response.data).toString('base64'),
       contentType: 'audio/mpeg'
     };
   } catch (err) {
-    console.error('ElevenLabs TTS error:', err.message);
+    console.error('ElevenLabs TTS error:', err.response?.status, err.response?.data ? JSON.stringify(err.response.data) : err.message);
     return null;
   }
 }
 
-// Smart TTS: Try ElevenLabs first (higher limits), fallback to Gemini
+// Groq Whisper transcription (fast, accurate)
+async function groqTranscribe(audioBase64, mimeType = 'audio/webm') {
+  if (!GROQ_API_KEY) throw new Error('GROQ_API_KEY not configured');
+
+  const audioBuffer = Buffer.from(audioBase64, 'base64');
+  const ext = mimeType.includes('webm') ? 'webm' : mimeType.includes('mp3') ? 'mp3' : 'wav';
+
+  const form = new FormData();
+  form.append('file', audioBuffer, { filename: `audio.${ext}`, contentType: mimeType });
+  form.append('model', 'whisper-large-v3');
+  form.append('response_format', 'verbose_json');
+
+  const start = Date.now();
+  const response = await axios.post(
+    'https://api.groq.com/openai/v1/audio/transcriptions',
+    form,
+    {
+      headers: { 'Authorization': `Bearer ${GROQ_API_KEY}`, ...form.getHeaders() },
+      maxContentLength: Infinity,
+      maxBodyLength: Infinity,
+    }
+  );
+  console.log(`[TIMING] Groq Whisper — ${Date.now() - start}ms`);
+
+  return {
+    text: response.data.text || '',
+    language: response.data.language || 'en'
+  };
+}
+
+// Active TTS: ElevenLabs (fast, multilingual)
 async function textToSpeech(text) {
-  // Try ElevenLabs first
-  // const elevenResult = await elevenLabsTTS(text);
-  // if (elevenResult) {
-  //   console.log('Using ElevenLabs TTS');
-  //   return elevenResult;
+  const result = await elevenLabsTTS(text);
+  if (result) return result;
+
+  // Fallback to Gemini TTS if ElevenLabs fails
+  // try {
+  //   const geminiResult = await geminiTTS(text);
+  //   if (geminiResult?.audio) {
+  //     return { data: geminiResult.audio, contentType: geminiResult.contentType || 'audio/wav' };
+  //   }
+  // } catch (err) {
+  //   console.error('Gemini TTS fallback error:', err.message);
   // }
 
-  // // Fallback to Gemini TTS
-  // console.log('Using Gemini TTS');
-  try {
-    const geminiResult = await geminiTTS(text);
-    if (geminiResult?.audio) {
-      return { data: geminiResult.audio, contentType: geminiResult.contentType || 'audio/wav' };
-    }
-  } catch (err) {
-    console.error('Gemini TTS error:', err.message);
-  }
-
   return null;
+}
+
+// Active transcription: Groq Whisper (fast, accurate)
+async function transcribeAudio(audioBase64, mimeType) {
+  return groqTranscribe(audioBase64, mimeType);
+
+  // Gemini transcription (slower, kept for reference)
+  // const audioBuffer = Buffer.from(audioBase64, 'base64');
+  // return geminiTranscribe(audioBuffer, mimeType);
 }
 const { chat, generateGreeting } = require('../services/geminiLive');
 
@@ -81,7 +121,7 @@ setInterval(() => {
  * Body: { message: string, sessionId?: string, generateAudio?: boolean }
  */
 router.post('/', async (req, res) => {
-  const { message, sessionId = 'default', generateAudio = true } = req.body;
+  const { message, sessionId = 'default', generateAudio = true, language = 'en' } = req.body;
 
   if (!isGeminiEnabled()) {
     return res.status(400).json({
@@ -104,7 +144,7 @@ router.post('/', async (req, res) => {
 
     // Get AI response
     let stepStart = Date.now();
-    const result = await chat(message, conversation.history);
+    const result = await chat(message, conversation.history, language);
     console.log(`[TIMING] /chat text chat — ${Date.now() - stepStart}ms`);
 
     // Update conversation history
@@ -160,7 +200,7 @@ router.post('/', async (req, res) => {
  * Body: { sessionId?: string, generateAudio?: boolean }
  */
 router.post('/start', async (req, res) => {
-  const { sessionId = `session_${Date.now()}_${Math.random().toString(36).slice(2)}`, generateAudio = true } = req.body;
+  const { sessionId = `session_${Date.now()}_${Math.random().toString(36).slice(2)}`, generateAudio = true, language = 'en' } = req.body;
 
   if (!isGeminiEnabled()) {
     return res.status(400).json({
@@ -172,8 +212,8 @@ router.post('/start', async (req, res) => {
   try {
     const routeStart = Date.now();
 
-    // Generate greeting
-    const result = await generateGreeting();
+    // Generate greeting in the user's language
+    const result = await generateGreeting(language);
     console.log(`[TIMING] /chat/start greeting — ${Date.now() - routeStart}ms`);
 
     // Initialize conversation
