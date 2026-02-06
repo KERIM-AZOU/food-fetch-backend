@@ -103,7 +103,9 @@ router.post('/', async (req, res) => {
     }
 
     // Get AI response
+    let stepStart = Date.now();
     const result = await chat(message, conversation.history);
+    console.log(`[TIMING] /chat text chat — ${Date.now() - stepStart}ms`);
 
     // Update conversation history
     conversation.history.push({ role: 'user', content: message });
@@ -126,12 +128,14 @@ router.post('/', async (req, res) => {
     // Generate TTS audio if requested
     let audio = null;
     if (generateAudio && result.response) {
+      stepStart = Date.now();
       try {
         audio = await textToSpeech(result.response);
       } catch (ttsError) {
         console.error('TTS error:', ttsError.message);
         // Continue without audio
       }
+      console.log(`[TIMING] /chat text TTS — ${Date.now() - stepStart}ms`);
     }
 
     res.json({
@@ -166,8 +170,11 @@ router.post('/start', async (req, res) => {
   }
 
   try {
+    const routeStart = Date.now();
+
     // Generate greeting
     const result = await generateGreeting();
+    console.log(`[TIMING] /chat/start greeting — ${Date.now() - routeStart}ms`);
 
     // Initialize conversation
     const conversation = {
@@ -180,13 +187,16 @@ router.post('/start', async (req, res) => {
     // Generate TTS audio if requested
     let audio = null;
     if (generateAudio && result.greeting) {
+      const ttsStart = Date.now();
       try {
         audio = await textToSpeech(result.greeting);
       } catch (ttsError) {
         console.error('TTS error:', ttsError.message);
       }
+      console.log(`[TIMING] /chat/start TTS — ${Date.now() - ttsStart}ms`);
     }
 
+    console.log(`[TIMING] /chat/start TOTAL — ${Date.now() - routeStart}ms`);
     res.json({
       greeting: result.greeting,
       sessionId,
@@ -219,12 +229,15 @@ router.post('/audio', async (req, res) => {
   }
 
   try {
+    const routeStart = Date.now();
     console.log(`Received audio: ${audio.length} chars base64, type: ${mimeType}`);
 
     // Transcribe audio to text - returns { text, language }
+    let stepStart = Date.now();
     const transcriptionResult = await transcribeAudio(audio, mimeType);
     const transcript = transcriptionResult?.text || '';
     const detectedLanguage = transcriptionResult?.language || 'en';
+    console.log(`[TIMING] /chat/audio transcribe — ${Date.now() - stepStart}ms`);
     console.log('Transcribed:', transcript, 'Language:', detectedLanguage);
 
     if (!transcript.trim()) {
@@ -249,7 +262,9 @@ router.post('/audio', async (req, res) => {
     conversation.language = detectedLanguage;
 
     // Process the transcribed text with detected language
+    stepStart = Date.now();
     const result = await chat(transcript, conversation.history, detectedLanguage);
+    console.log(`[TIMING] /chat/audio chat — ${Date.now() - stepStart}ms`);
 
     // Update history
     conversation.history.push({ role: 'user', content: transcript });
@@ -267,13 +282,16 @@ router.post('/audio', async (req, res) => {
     }
 
     // Generate TTS
+    stepStart = Date.now();
     let audioResponse = null;
     try {
       audioResponse = await textToSpeech(result.response);
     } catch (ttsError) {
       console.error('TTS error:', ttsError.message);
     }
+    console.log(`[TIMING] /chat/audio TTS — ${Date.now() - stepStart}ms`);
 
+    console.log(`[TIMING] /chat/audio TOTAL — ${Date.now() - routeStart}ms`);
     res.json({
       response: result.response,
       transcript,

@@ -8,12 +8,16 @@ const TTS_MODEL = 'gemini-2.5-flash-preview-tts';
 /**
  * Call Vertex AI generateContent endpoint
  */
-async function callVertexAI(model, body) {
+async function callVertexAI(model, body, label = '') {
+  const tag = label || model;
+  const start = Date.now();
+  console.log(`[TIMING] ${tag} — request started`);
   const response = await axios.post(
     `${VERTEX_AI_BASE}/${model}:generateContent?key=${GEMINI_API_KEY}`,
     body,
     { headers: { 'Content-Type': 'application/json' } }
   );
+  console.log(`[TIMING] ${tag} — ${Date.now() - start}ms`);
   return response.data;
 }
 
@@ -186,6 +190,8 @@ async function textToSpeech(text, language = 'en') {
   }
 
   try {
+    const ttsStart = Date.now();
+    console.log('[TIMING] TTS — request started');
     const response = await axios.post(
       `${VERTEX_AI_BASE}/${TTS_MODEL}:generateContent?key=${GEMINI_API_KEY}`,
       {
@@ -221,7 +227,7 @@ async function textToSpeech(text, language = 'en') {
       const parts = candidate.content?.parts || [];
       for (const part of parts) {
         if (part.inlineData && part.inlineData.mimeType?.includes('audio')) {
-          console.log('Gemini TTS: Audio generated successfully');
+          console.log(`[TIMING] TTS — ${Date.now() - ttsStart}ms`);
 
           const pcmBase64 = part.inlineData.data;
           const pcmBuffer = Buffer.from(pcmBase64, 'base64');

@@ -11,12 +11,16 @@ const MODEL = 'gemini-2.5-flash-lite';
 /**
  * Call Vertex AI generateContent endpoint
  */
-async function callVertexAI(model, body) {
+async function callVertexAI(model, body, label = '') {
+  const tag = label || model;
+  const start = Date.now();
+  console.log(`[TIMING] ${tag} — request started`);
   const response = await axios.post(
     `${VERTEX_AI_BASE}/${model}:generateContent?key=${GEMINI_API_KEY}`,
     body,
     { headers: { 'Content-Type': 'application/json' } }
   );
+  console.log(`[TIMING] ${tag} — ${Date.now() - start}ms`);
   return response.data;
 }
 
