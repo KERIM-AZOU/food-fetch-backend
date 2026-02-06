@@ -3,11 +3,12 @@ const axios = require('axios');
 const router = express.Router();
 const { extractKeywords } = require('../utils/voiceProcessor');
 const { searchSnoonu } = require('../platforms/snoonu');
+const { isGeminiEnabled, extractFoodKeywords, translateText } = require('../services/gemini');
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
 // Extract food keywords using Groq Llama (multilingual)
-async function extractWithAI(text) {
+async function extractWithGroq(text) {
   try {
     const response = await axios.post(
       'https://api.groq.com/openai/v1/chat/completions',
@@ -39,12 +40,27 @@ Examples: "frites"→fries | "أريد بيتزا"→pizza | "poulet avec riz"�
     );
 
     const extracted = response.data.choices[0]?.message?.content?.trim() || '';
-    console.log('AI extracted:', extracted, 'from:', text);
+    console.log('Groq AI extracted:', extracted, 'from:', text);
     return extracted;
   } catch (error) {
-    console.error('AI extraction error:', error.response?.data || error.message);
+    console.error('Groq AI extraction error:', error.response?.data || error.message);
     return null; // Fallback to simple extraction
   }
+}
+
+// Unified extraction function - uses Gemini or Groq based on toggle
+async function extractWithAI(text) {
+  if (isGeminiEnabled()) {
+    console.log('Using Gemini for food extraction');
+    try {
+      const result = await extractFoodKeywords(text);
+      return result;
+    } catch (error) {
+      console.error('Gemini extraction error, falling back to Groq:', error.message);
+      return extractWithGroq(text);
+    }
+  }
+  return extractWithGroq(text);
 }
 
 // Generate "not food related" message in the user's language
@@ -55,6 +71,16 @@ async function generateNotFoodMessage(language) {
     return defaultMessage;
   }
 
+  // Use Gemini if enabled
+  if (isGeminiEnabled()) {
+    try {
+      return await translateText(defaultMessage, LANGUAGE_NAMES[language] || language);
+    } catch (error) {
+      console.error('Gemini translation error, falling back to Groq:', error.message);
+    }
+  }
+
+  // Groq fallback
   try {
     const response = await axios.post(
       'https://api.groq.com/openai/v1/chat/completions',
@@ -94,10 +120,22 @@ const LANGUAGE_NAMES = {
 
 // Generate "Searching for X" message in the user's language
 async function generateSearchMessage(searchQuery, language) {
+  const defaultMessage = `Searching for ${searchQuery}`;
+
   if (language === 'en') {
-    return `Searching for ${searchQuery}`;
+    return defaultMessage;
   }
 
+  // Use Gemini if enabled
+  if (isGeminiEnabled()) {
+    try {
+      return await translateText(defaultMessage, LANGUAGE_NAMES[language] || language);
+    } catch (error) {
+      console.error('Gemini translation error, falling back to Groq:', error.message);
+    }
+  }
+
+  // Groq fallback
   try {
     const response = await axios.post(
       'https://api.groq.com/openai/v1/chat/completions',
@@ -106,7 +144,7 @@ async function generateSearchMessage(searchQuery, language) {
         messages: [
           {
             role: 'user',
-            content: `Translate to ${LANGUAGE_NAMES[language] || language} (only output translation): Searching for ${searchQuery}`
+            content: `Translate to ${LANGUAGE_NAMES[language] || language} (only output translation): ${defaultMessage}`
           }
         ],
         temperature: 0.1,
@@ -120,10 +158,10 @@ async function generateSearchMessage(searchQuery, language) {
       }
     );
 
-    return response.data.choices[0]?.message?.content?.trim() || `Searching for ${searchQuery}`;
+    return response.data.choices[0]?.message?.content?.trim() || defaultMessage;
   } catch (error) {
     console.error('Translation error:', error.message);
-    return `Searching for ${searchQuery}`;
+    return defaultMessage;
   }
 }
 

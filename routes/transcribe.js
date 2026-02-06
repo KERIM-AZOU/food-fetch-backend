@@ -2,6 +2,7 @@ const express = require('express');
 const axios = require('axios');
 const FormData = require('form-data');
 const router = express.Router();
+const { isGeminiEnabled, transcribeAudio } = require('../services/gemini');
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
@@ -40,6 +41,26 @@ router.post('/', async (req, res) => {
   try {
     // Convert base64 to buffer
     const audioBuffer = Buffer.from(audio, 'base64');
+
+    // Use Gemini if enabled
+    if (isGeminiEnabled()) {
+      console.log('Using Gemini for transcription');
+      const result = await transcribeAudio(audioBuffer, mimeType);
+
+      // Filter hallucinations
+      if (isHallucination(result.text)) {
+        console.log('Filtered hallucination (Gemini):', result.text);
+        return res.json({ text: '', language: result.language });
+      }
+
+      console.log('Gemini transcription:', result.text, '| Language:', result.language);
+      return res.json({
+        text: result.text,
+        language: result.language
+      });
+    }
+
+    // Fallback to Groq Whisper
 
     // Determine file extension from mime type
     const ext = mimeType.includes('webm') ? 'webm' : mimeType.includes('mp3') ? 'mp3' : 'wav';

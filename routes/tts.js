@@ -1,6 +1,7 @@
 const express = require('express');
 const axios = require('axios');
 const router = express.Router();
+const { isGeminiEnabled, textToSpeech } = require('../services/gemini');
 
 // ElevenLabs API - Get free key at https://elevenlabs.io
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
@@ -10,18 +11,45 @@ const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
 const DEFAULT_VOICE_ID = '21m00Tcm4TlvDq8ikWAM';
 
 // POST /api/tts
-// Converts text to speech using ElevenLabs
+// Converts text to speech using Gemini or ElevenLabs
 router.post('/', async (req, res) => {
-  const { text, voiceId = DEFAULT_VOICE_ID } = req.body;
+  const { text, voiceId = DEFAULT_VOICE_ID, language = 'en' } = req.body;
 
   if (!text) {
     return res.status(400).json({ error: 'Text is required' });
   }
 
+  // Use Gemini TTS when enabled (no fallback to ElevenLabs)
+  if (isGeminiEnabled()) {
+    console.log('Using Gemini TTS');
+    try {
+      const geminiResult = await textToSpeech(text, language);
+      if (geminiResult && geminiResult.audio) {
+        console.log('Gemini TTS successful');
+        return res.json({
+          audio: geminiResult.audio,
+          contentType: geminiResult.contentType || 'audio/wav'
+        });
+      }
+      // Gemini TTS failed but don't fallback - return error
+      return res.status(500).json({
+        error: 'Gemini TTS failed to generate audio',
+        details: 'No audio returned from Gemini'
+      });
+    } catch (error) {
+      console.error('Gemini TTS error:', error.message);
+      return res.status(500).json({
+        error: 'Gemini TTS error',
+        details: error.message
+      });
+    }
+  }
+
+  // Only use ElevenLabs when Gemini is disabled
   if (!ELEVENLABS_API_KEY) {
     return res.status(500).json({
-      error: 'ElevenLabs API key not configured',
-      setup: 'Set ELEVENLABS_API_KEY environment variable. Get free key at https://elevenlabs.io'
+      error: 'TTS not available',
+      setup: 'Set ELEVENLABS_API_KEY or enable Gemini with USE_GEMINI=true'
     });
   }
 

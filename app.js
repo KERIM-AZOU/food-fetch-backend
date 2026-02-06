@@ -20,12 +20,14 @@ const voiceRouter = require('./routes/voice');
 const transcribeRouter = require('./routes/transcribe');
 const ttsRouter = require('./routes/tts');
 const translateRouter = require('./routes/translate');
+const chatRouter = require('./routes/chat');
 
 app.use('/api/search', searchRouter);
 app.use('/api/process-voice', voiceRouter);
 app.use('/api/transcribe', transcribeRouter);
 app.use('/api/tts', ttsRouter);
 app.use('/api/translate', translateRouter);
+app.use('/api/chat', chatRouter);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
