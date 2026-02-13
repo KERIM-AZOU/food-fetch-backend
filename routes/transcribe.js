@@ -2,9 +2,9 @@ const express = require('express');
 const axios = require('axios');
 const FormData = require('form-data');
 const router = express.Router();
-const { isGeminiEnabled, transcribeAudio } = require('../services/gemini');
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
+// const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
 // Common Whisper hallucinations to filter out (happens with silence/noise)
 const HALLUCINATION_PATTERNS = [
@@ -42,26 +42,6 @@ router.post('/', async (req, res) => {
     // Convert base64 to buffer
     const audioBuffer = Buffer.from(audio, 'base64');
 
-    // Use Gemini if enabled
-    if (isGeminiEnabled()) {
-      console.log('Using Gemini for transcription');
-      const result = await transcribeAudio(audioBuffer, mimeType);
-
-      // Filter hallucinations
-      if (isHallucination(result.text)) {
-        console.log('Filtered hallucination (Gemini):', result.text);
-        return res.json({ text: '', language: result.language });
-      }
-
-      console.log('Gemini transcription:', result.text, '| Language:', result.language);
-      return res.json({
-        text: result.text,
-        language: result.language
-      });
-    }
-
-    // Fallback to Groq Whisper
-
     // Determine file extension from mime type
     const ext = mimeType.includes('webm') ? 'webm' : mimeType.includes('mp3') ? 'mp3' : 'wav';
 
@@ -71,11 +51,10 @@ router.post('/', async (req, res) => {
       filename: `audio.${ext}`,
       contentType: mimeType,
     });
-    form.append('model', 'whisper-large-v3');
-    // Don't specify language - let Whisper auto-detect
-    form.append('response_format', 'verbose_json'); // Get language detection
+    form.append('model', 'whisper-large-v3-turbo');
+    form.append('response_format', 'verbose_json');
 
-    // Call Groq Whisper API using axios
+    // Groq Whisper API (fast, ~200ms)
     const response = await axios.post(
       'https://api.groq.com/openai/v1/audio/transcriptions',
       form,
@@ -88,6 +67,20 @@ router.post('/', async (req, res) => {
         maxBodyLength: Infinity,
       }
     );
+
+    // // OpenAI Whisper API (slower, ~2s)
+    // const response = await axios.post(
+    //   'https://api.openai.com/v1/audio/transcriptions',
+    //   form,
+    //   {
+    //     headers: {
+    //       'Authorization': `Bearer ${OPENAI_API_KEY}`,
+    //       ...form.getHeaders(),
+    //     },
+    //     maxContentLength: Infinity,
+    //     maxBodyLength: Infinity,
+    //   }
+    // );
 
     const detectedLanguage = response.data.language || 'en';
     const rawText = response.data.text || '';

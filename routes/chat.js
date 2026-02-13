@@ -2,49 +2,79 @@ const express = require('express');
 const router = express.Router();
 const axios = require('axios');
 const FormData = require('form-data');
-const { isGeminiEnabled, textToSpeech: geminiTTS, transcribeAudio: geminiTranscribe } = require('../services/gemini');
 
-const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
-const VOICE_ID = 'EXAVITQu4vr4xnSDxMaL'; // Bella (warm, friendly — free tier)
-// const ERYN_VOICE_ID = 'dj3G1R1ilKoFKhBnWOzG'; // Eryn (friendly — requires creator tier)
-// const RACHEL_VOICE_ID = '21m00Tcm4TlvDq8ikWAM'; // Rachel (calm/neutral — free tier)
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+console.log('OpenAI API Key:', OPENAI_API_KEY);
+// Groq TTS with PlayAI (fast)
+// async function groqTTS(text) {
+//   if (!GROQ_API_KEY) return null;
 
-// ElevenLabs TTS with Eryn voice (friendly, conversational)
-async function elevenLabsTTS(text) {
-  if (!ELEVENLABS_API_KEY) return null;
+//   try {
+//     const start = Date.now();
+//     const response = await axios.post(
+//       'https://api.groq.com/openai/v1/audio/speech',
+//       {
+//         model: 'playai-tts',
+//         input: text,
+//         voice: 'Arista-PlayAI',
+//         response_format: 'wav'
+//       },
+//       {
+//         headers: {
+//           'Authorization': `Bearer ${GROQ_API_KEY}`,
+//           'Content-Type': 'application/json',
+//         },
+//         responseType: 'arraybuffer',
+//         timeout: 15000
+//       }
+//     );
+//     console.log(`[TIMING] Groq TTS — ${Date.now() - start}ms`);
+//     return {
+//       data: Buffer.from(response.data).toString('base64'),
+//       contentType: 'audio/wav'
+//     };
+//   } catch (err) {
+//     console.error('Groq TTS error:', err.response?.status, err.response?.data ? Buffer.isBuffer(err.response.data) ? err.response.data.toString() : JSON.stringify(err.response.data) : err.message);
+//     return null;
+//   }
+// }
+
+// // OpenAI TTS with nova voice (slower, ~2s)
+async function openaiTTS(text) {
+  if (!OPENAI_API_KEY) return null;
 
   try {
     const start = Date.now();
     const response = await axios.post(
-      `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`,
+      'https://api.openai.com/v1/audio/speech',
       {
-        text,
-        model_id: 'eleven_multilingual_v2',
-        voice_settings: { stability: 0.3, similarity_boost: 0.8, style: 0.75 }
+        model: 'tts-1',
+        input: text,
+        voice: 'nova',
+        response_format: 'mp3'
       },
       {
         headers: {
-          'Accept': 'audio/mpeg',
+          'Authorization': `Bearer ${OPENAI_API_KEY}`,
           'Content-Type': 'application/json',
-          'xi-api-key': ELEVENLABS_API_KEY,
         },
         responseType: 'arraybuffer',
         timeout: 15000
       }
     );
-    console.log(`[TIMING] ElevenLabs TTS — ${Date.now() - start}ms`);
+    console.log(`[TIMING] OpenAI TTS — ${Date.now() - start}ms`);
     return {
       data: Buffer.from(response.data).toString('base64'),
       contentType: 'audio/mpeg'
     };
   } catch (err) {
-    console.error('ElevenLabs TTS error:', err.response?.status, err.response?.data ? JSON.stringify(err.response.data) : err.message);
+    console.error('OpenAI TTS error:', err.response?.status, err.response?.data ? JSON.stringify(err.response.data) : err.message);
     return null;
   }
 }
 
-// Groq Whisper transcription (fast, accurate)
+// Groq Whisper transcription (fast, ~200ms)
 async function groqTranscribe(audioBase64, mimeType = 'audio/webm') {
   if (!GROQ_API_KEY) throw new Error('GROQ_API_KEY not configured');
 
@@ -53,7 +83,7 @@ async function groqTranscribe(audioBase64, mimeType = 'audio/webm') {
 
   const form = new FormData();
   form.append('file', audioBuffer, { filename: `audio.${ext}`, contentType: mimeType });
-  form.append('model', 'whisper-large-v3');
+  form.append('model', 'whisper-large-v3-turbo');
   form.append('response_format', 'verbose_json');
 
   const start = Date.now();
@@ -74,33 +104,49 @@ async function groqTranscribe(audioBase64, mimeType = 'audio/webm') {
   };
 }
 
-// Active TTS: ElevenLabs (fast, multilingual)
+// // OpenAI Whisper transcription (slower, ~2s)
+// async function openaiTranscribe(audioBase64, mimeType = 'audio/webm') {
+//   if (!OPENAI_API_KEY) throw new Error('OPENAI_API_KEY not configured');
+//
+//   const audioBuffer = Buffer.from(audioBase64, 'base64');
+//   const ext = mimeType.includes('webm') ? 'webm' : mimeType.includes('mp3') ? 'mp3' : 'wav';
+//
+//   const form = new FormData();
+//   form.append('file', audioBuffer, { filename: `audio.${ext}`, contentType: mimeType });
+//   form.append('model', 'whisper-1');
+//   form.append('response_format', 'verbose_json');
+//
+//   const start = Date.now();
+//   const response = await axios.post(
+//     'https://api.openai.com/v1/audio/transcriptions',
+//     form,
+//     {
+//       headers: { 'Authorization': `Bearer ${OPENAI_API_KEY}`, ...form.getHeaders() },
+//       maxContentLength: Infinity,
+//       maxBodyLength: Infinity,
+//     }
+//   );
+//   console.log(`[TIMING] OpenAI Whisper — ${Date.now() - start}ms`);
+//
+//   return {
+//     text: response.data.text || '',
+//     language: response.data.language || 'en'
+//   };
+// }
+
+// Active TTS: OpenAI
 async function textToSpeech(text) {
-  const result = await elevenLabsTTS(text);
-  if (result) return result;
-
-  // Fallback to Gemini TTS if ElevenLabs fails
-  // try {
-  //   const geminiResult = await geminiTTS(text);
-  //   if (geminiResult?.audio) {
-  //     return { data: geminiResult.audio, contentType: geminiResult.contentType || 'audio/wav' };
-  //   }
-  // } catch (err) {
-  //   console.error('Gemini TTS fallback error:', err.message);
-  // }
-
-  return null;
+  // return groqTTS(text);
+  return openaiTTS(text);
 }
 
-// Active transcription: Groq Whisper (fast, accurate)
+// Active transcription: Groq Whisper
 async function transcribeAudio(audioBase64, mimeType) {
   return groqTranscribe(audioBase64, mimeType);
-
-  // Gemini transcription (slower, kept for reference)
-  // const audioBuffer = Buffer.from(audioBase64, 'base64');
-  // return geminiTranscribe(audioBuffer, mimeType);
+  // return openaiTranscribe(audioBase64, mimeType);
 }
-const { chat, generateGreeting } = require('../services/geminiLive');
+
+const { chat, generateGreeting } = require('../services/chatService');
 
 // In-memory conversation storage (use Redis/DB in production for multi-server)
 const conversations = new Map();
@@ -122,13 +168,6 @@ setInterval(() => {
  */
 router.post('/', async (req, res) => {
   const { message, sessionId = 'default', generateAudio = true, language = 'en' } = req.body;
-
-  if (!isGeminiEnabled()) {
-    return res.status(400).json({
-      error: 'Chat requires Gemini to be enabled',
-      setup: 'Set USE_GEMINI=true in .env'
-    });
-  }
 
   if (!message) {
     return res.status(400).json({ error: 'Message is required' });
@@ -202,13 +241,6 @@ router.post('/', async (req, res) => {
 router.post('/start', async (req, res) => {
   const { sessionId = `session_${Date.now()}_${Math.random().toString(36).slice(2)}`, generateAudio = true, language = 'en' } = req.body;
 
-  if (!isGeminiEnabled()) {
-    return res.status(400).json({
-      error: 'Chat requires Gemini to be enabled',
-      setup: 'Set USE_GEMINI=true in .env'
-    });
-  }
-
   try {
     const routeStart = Date.now();
 
@@ -256,13 +288,6 @@ router.post('/start', async (req, res) => {
  */
 router.post('/audio', async (req, res) => {
   const { audio, mimeType = 'audio/webm', sessionId = 'default' } = req.body;
-
-  if (!isGeminiEnabled()) {
-    return res.status(400).json({
-      error: 'Audio chat requires Gemini to be enabled',
-      setup: 'Set USE_GEMINI=true in .env'
-    });
-  }
 
   if (!audio) {
     return res.status(400).json({ error: 'Audio data is required' });

@@ -3,17 +3,17 @@ const axios = require('axios');
 const router = express.Router();
 const { extractKeywords } = require('../utils/voiceProcessor');
 const { searchSnoonu } = require('../platforms/snoonu');
-const { isGeminiEnabled, extractFoodKeywords, translateText } = require('../services/gemini');
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
+// const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
-// Extract food keywords using Groq Llama (multilingual)
+// Extract food keywords using Groq (fast)
 async function extractWithGroq(text) {
   try {
     const response = await axios.post(
       'https://api.groq.com/openai/v1/chat/completions',
       {
-        model: 'llama-3.1-8b-instant', // Fast and free
+        model: 'llama-3.1-8b-instant',
         messages: [
           {
             role: 'system',
@@ -40,28 +40,62 @@ Examples: "frites"→fries | "أريد بيتزا"→pizza | "poulet avec riz"�
     );
 
     const extracted = response.data.choices[0]?.message?.content?.trim() || '';
-    console.log('Groq AI extracted:', extracted, 'from:', text);
+    console.log('Groq extracted:', extracted, 'from:', text);
     return extracted;
   } catch (error) {
-    console.error('Groq AI extraction error:', error.response?.data || error.message);
+    console.error('Groq extraction error:', error.response?.data || error.message);
     return null; // Fallback to simple extraction
   }
 }
 
-// Unified extraction function - uses Gemini or Groq based on toggle
-async function extractWithAI(text) {
-  if (isGeminiEnabled()) {
-    console.log('Using Gemini for food extraction');
-    try {
-      const result = await extractFoodKeywords(text);
-      return result;
-    } catch (error) {
-      console.error('Gemini extraction error, falling back to Groq:', error.message);
-      return extractWithGroq(text);
-    }
-  }
-  return extractWithGroq(text);
-}
+// // Extract food keywords using OpenAI (slower, ~2s)
+// async function extractWithOpenAI(text) {
+//   try {
+//     const response = await axios.post(
+//       'https://api.openai.com/v1/chat/completions',
+//       {
+//         model: 'gpt-4o-mini',
+//         messages: [
+//           {
+//             role: 'system',
+//             content: `Extract food/drink items in English. If NO food/drink found, return: NOT_FOOD_RELATED
+//
+// Rules: Translate to English, space-separate items, ignore filler words.
+//
+// Examples: "frites"→fries | "أريد بيتزا"→pizza | "poulet avec riz"→chicken rice | "what's the weather"→NOT_FOOD_RELATED | "مرحبا"→NOT_FOOD_RELATED`
+//           },
+//           {
+//             role: 'user',
+//             content: text
+//           }
+//         ],
+//         temperature: 0.1,
+//         max_tokens: 100
+//       },
+//       {
+//         headers: {
+//           'Authorization': `Bearer ${OPENAI_API_KEY}`,
+//           'Content-Type': 'application/json'
+//         }
+//       }
+//     );
+//
+//     const extracted = response.data.choices[0]?.message?.content?.trim() || '';
+//     console.log('OpenAI extracted:', extracted, 'from:', text);
+//     return extracted;
+//   } catch (error) {
+//     console.error('OpenAI extraction error:', error.response?.data || error.message);
+//     return null;
+//   }
+// }
+
+// Language name mapping for TTS responses
+const LANGUAGE_NAMES = {
+  en: 'English', ar: 'Arabic', fr: 'French', es: 'Spanish', de: 'German',
+  it: 'Italian', pt: 'Portuguese', ru: 'Russian', zh: 'Chinese', ja: 'Japanese',
+  ko: 'Korean', hi: 'Hindi', tr: 'Turkish', nl: 'Dutch', pl: 'Polish',
+  sv: 'Swedish', da: 'Danish', no: 'Norwegian', fi: 'Finnish', cs: 'Czech'
+};
 
 // Generate "not food related" message in the user's language
 async function generateNotFoodMessage(language) {
@@ -71,16 +105,6 @@ async function generateNotFoodMessage(language) {
     return defaultMessage;
   }
 
-  // Use Gemini if enabled
-  if (isGeminiEnabled()) {
-    try {
-      return await translateText(defaultMessage, LANGUAGE_NAMES[language] || language);
-    } catch (error) {
-      console.error('Gemini translation error, falling back to Groq:', error.message);
-    }
-  }
-
-  // Groq fallback
   try {
     const response = await axios.post(
       'https://api.groq.com/openai/v1/chat/completions',
@@ -110,14 +134,6 @@ async function generateNotFoodMessage(language) {
   }
 }
 
-// Language name mapping for TTS responses
-const LANGUAGE_NAMES = {
-  en: 'English', ar: 'Arabic', fr: 'French', es: 'Spanish', de: 'German',
-  it: 'Italian', pt: 'Portuguese', ru: 'Russian', zh: 'Chinese', ja: 'Japanese',
-  ko: 'Korean', hi: 'Hindi', tr: 'Turkish', nl: 'Dutch', pl: 'Polish',
-  sv: 'Swedish', da: 'Danish', no: 'Norwegian', fi: 'Finnish', cs: 'Czech'
-};
-
 // Generate "Searching for X" message in the user's language
 async function generateSearchMessage(searchQuery, language) {
   const defaultMessage = `Searching for ${searchQuery}`;
@@ -126,16 +142,6 @@ async function generateSearchMessage(searchQuery, language) {
     return defaultMessage;
   }
 
-  // Use Gemini if enabled
-  if (isGeminiEnabled()) {
-    try {
-      return await translateText(defaultMessage, LANGUAGE_NAMES[language] || language);
-    } catch (error) {
-      console.error('Gemini translation error, falling back to Groq:', error.message);
-    }
-  }
-
-  // Groq fallback
   try {
     const response = await axios.post(
       'https://api.groq.com/openai/v1/chat/completions',
@@ -186,7 +192,7 @@ router.post('/', async (req, res) => {
 
     // Try AI extraction first if enabled
     if (useAI) {
-      const aiResult = await extractWithAI(text);
+      const aiResult = await extractWithGroq(text);
 
       // Check if the request is not food related
       if (aiResult === 'NOT_FOOD_RELATED') {

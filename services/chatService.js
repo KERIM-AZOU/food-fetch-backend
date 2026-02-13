@@ -1,5 +1,5 @@
 /**
- * Chat Service - Groq LLM (fast) with Gemini fallback
+ * Chat Service - Groq Llama (fast) with OpenAI fallback
  * Handles AI conversations with food detection capability
  */
 const axios = require('axios');
@@ -7,40 +7,9 @@ const axios = require('axios');
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const GROQ_MODEL = 'llama-3.3-70b-versatile';
 
-// Gemini (kept for fallback reference)
-// const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-// const VERTEX_AI_BASE = 'https://aiplatform.googleapis.com/v1/publishers/google/models';
-// const MODEL = 'gemini-2.5-flash-lite';
-
-// /**
-//  * Call Vertex AI generateContent endpoint
-//  */
-// async function callVertexAI(model, body, label = '') {
-//   const tag = label || model;
-//   const start = Date.now();
-//   console.log(`[TIMING] ${tag} — request started`);
-//   const response = await axios.post(
-//     `${VERTEX_AI_BASE}/${model}:generateContent?key=${GEMINI_API_KEY}`,
-//     body,
-//     { headers: { 'Content-Type': 'application/json' } }
-//   );
-//   console.log(`[TIMING] ${tag} — ${Date.now() - start}ms`);
-//   return response.data;
-// }
-
-// /**
-//  * Extract text from Vertex AI response
-//  */
-// function extractText(response) {
-//   const candidates = response.candidates || [];
-//   if (candidates.length > 0) {
-//     const parts = candidates[0].content?.parts || [];
-//     for (const part of parts) {
-//       if (part.text) return part.text;
-//     }
-//   }
-//   return '';
-// }
+// // OpenAI (slower, ~2s but more reliable)
+// const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+// const OPENAI_MODEL = 'gpt-4o-mini';
 
 // System prompt
 function getChatSystemPrompt(language = 'en') {
@@ -57,8 +26,9 @@ function getChatSystemPrompt(language = 'en') {
 **Response format — JSON only, no extra text:**
 {"response":"your reply","foodMentioned":bool,"foodItems":["items in english"],"shouldSearch":bool,"shouldStop":bool}
 
-- foodItems: always in English, even if the user speaks another language
-- shouldSearch: true when user mentions specific food they want
+- foodItems: always in English, even if the user speaks another language. Extract ALL food/drink items mentioned.
+- foodMentioned: true whenever the user mentions ANY food, drink, or says they're hungry
+- shouldSearch: true whenever foodItems is not empty — if they name a food, search for it
 - shouldStop: true only when user says bye/stop/done/quit/goodbye
 
 **Examples:**
@@ -71,14 +41,17 @@ User: "I'm starving"
 User: "pizza"
 {"response":"Great choice! Let me find some pizza for you. Any particular style you love?","foodMentioned":true,"foodItems":["pizza"],"shouldSearch":true,"shouldStop":false}
 
+User: "Je veux de la pizza s'il vous plaît"
+{"response":"Excellent choix ! Je vais chercher de la pizza pour toi. Tu préfères quel style ?","foodMentioned":true,"foodItems":["pizza"],"shouldSearch":true,"shouldStop":false}
+
 User: "bye"
 {"response":"It was awesome chatting with you! Come back anytime!","foodMentioned":false,"foodItems":[],"shouldSearch":false,"shouldStop":true}`;
 }
 
 /**
- * Parse JSON response from Gemini
+ * Parse JSON response from AI
  */
-function parseGeminiResponse(text) {
+function parseAIResponse(text) {
   try {
     const parsed = JSON.parse(text);
     return {
@@ -116,7 +89,7 @@ function parseGeminiResponse(text) {
 }
 
 /**
- * Chat with Groq LLM - handles conversation with food detection
+ * Chat with Groq Llama - handles conversation with food detection
  * @param {string} userMessage - The user's message
  * @param {Array} conversationHistory - Previous messages for context
  * @param {string} language - User's detected language code (e.g., 'en', 'ar', 'no')
@@ -150,7 +123,8 @@ async function chat(userMessage, conversationHistory = [], language = 'en') {
         model: GROQ_MODEL,
         messages,
         temperature: 0.7,
-        max_tokens: 150
+        max_tokens: 150,
+        response_format: { type: 'json_object' }
       },
       {
         headers: {
@@ -162,7 +136,7 @@ async function chat(userMessage, conversationHistory = [], language = 'en') {
     console.log(`[TIMING] Groq chat — ${Date.now() - start}ms`);
 
     const responseText = result.data.choices?.[0]?.message?.content || '';
-    return parseGeminiResponse(responseText);
+    return parseAIResponse(responseText);
 
   } catch (error) {
     console.error('Groq chat error:', error.response?.data || error.message);
@@ -180,20 +154,64 @@ async function chat(userMessage, conversationHistory = [], language = 'en') {
   }
 }
 
-// Gemini chat (kept for reference)
-// async function chatGemini(userMessage, conversationHistory = [], language = 'en') {
-//   const contents = [];
-//   const recentHistory = conversationHistory.slice(-10);
-//   for (const msg of recentHistory) {
-//     contents.push({ role: msg.role === 'user' ? 'user' : 'model', parts: [{ text: msg.content }] });
+// // OpenAI chat (slower, ~2s but more reliable JSON)
+// async function chat(userMessage, conversationHistory = [], language = 'en') {
+//   if (!OPENAI_API_KEY) {
+//     throw new Error('OPENAI_API_KEY not configured');
 //   }
-//   contents.push({ role: 'user', parts: [{ text: userMessage }] });
-//   const result = await callVertexAI(MODEL, {
-//     contents,
-//     systemInstruction: { parts: [{ text: getChatSystemPrompt(language) }] },
-//     generationConfig: { temperature: 0.7, maxOutputTokens: 150 }
-//   });
-//   return parseGeminiResponse(extractText(result));
+//
+//   try {
+//     const messages = [
+//       { role: 'system', content: getChatSystemPrompt(language) }
+//     ];
+//
+//     const recentHistory = conversationHistory.slice(-10);
+//     for (const msg of recentHistory) {
+//       messages.push({
+//         role: msg.role === 'user' ? 'user' : 'assistant',
+//         content: msg.content
+//       });
+//     }
+//
+//     messages.push({ role: 'user', content: userMessage });
+//
+//     const start = Date.now();
+//     console.log('[TIMING] OpenAI chat — request started');
+//     const result = await axios.post(
+//       'https://api.openai.com/v1/chat/completions',
+//       {
+//         model: OPENAI_MODEL,
+//         messages,
+//         temperature: 0.7,
+//         max_tokens: 150,
+//         response_format: { type: 'json_object' }
+//       },
+//       {
+//         headers: {
+//           'Authorization': `Bearer ${OPENAI_API_KEY}`,
+//           'Content-Type': 'application/json'
+//         }
+//       }
+//     );
+//     console.log(`[TIMING] OpenAI chat — ${Date.now() - start}ms`);
+//
+//     const responseText = result.data.choices?.[0]?.message?.content || '';
+//     return parseAIResponse(responseText);
+//
+//   } catch (error) {
+//     console.error('OpenAI chat error:', error.response?.data || error.message);
+//
+//     if (error.response?.status === 429) {
+//       return {
+//         response: language === 'ar' ? "لحظة، جاري المحاولة..." : "I'm a bit busy right now. Give me a moment and try again!",
+//         foodMentioned: false,
+//         foodItems: [],
+//         shouldSearch: false
+//       };
+//     }
+//
+//     throw error;
+//   }
 // }
 
 /**
@@ -226,5 +244,5 @@ function generateGreeting(language = 'en') {
 module.exports = {
   chat,
   generateGreeting,
-  parseGeminiResponse
+  parseAIResponse
 };

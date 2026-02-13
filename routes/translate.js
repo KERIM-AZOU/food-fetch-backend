@@ -3,6 +3,7 @@ const axios = require('axios');
 const router = express.Router();
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
+// const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
 // Language name mapping
 const LANGUAGE_NAMES = {
@@ -46,7 +47,7 @@ const PHRASES = {
   }
 };
 
-// Translate a phrase using Groq
+// Translate a phrase using Groq (fast)
 async function translatePhrase(text, targetLang) {
   if (targetLang === 'en') return text;
 
@@ -79,6 +80,40 @@ async function translatePhrase(text, targetLang) {
     return text;
   }
 }
+
+// // Translate a phrase using OpenAI (slower, ~2s)
+// async function translatePhrase(text, targetLang) {
+//   if (targetLang === 'en') return text;
+//
+//   try {
+//     const response = await axios.post(
+//       'https://api.openai.com/v1/chat/completions',
+//       {
+//         model: 'gpt-4o-mini',
+//         messages: [
+//           {
+//             role: 'system',
+//             content: `Translate to ${LANGUAGE_NAMES[targetLang] || targetLang}. Return ONLY the translation, nothing else. Keep numbers as-is.`
+//           },
+//           { role: 'user', content: text }
+//         ],
+//         temperature: 0.1,
+//         max_tokens: 150
+//       },
+//       {
+//         headers: {
+//           'Authorization': `Bearer ${OPENAI_API_KEY}`,
+//           'Content-Type': 'application/json'
+//         }
+//       }
+//     );
+//
+//     return response.data.choices[0]?.message?.content?.trim() || text;
+//   } catch (error) {
+//     console.error('Translation error:', error.message);
+//     return text;
+//   }
+// }
 
 // POST /api/translate
 router.post('/', async (req, res) => {

@@ -1,82 +1,73 @@
 const express = require('express');
 const axios = require('axios');
 const router = express.Router();
-const { isGeminiEnabled, textToSpeech } = require('../services/gemini');
 
-// ElevenLabs API - Get free key at https://elevenlabs.io
-const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
-
-// Default voice ID (Rachel - natural female voice)
-// Other free voices: 21m00Tcm4TlvDq8ikWAM (Rachel), EXAVITQu4vr4xnSDxMaL (Bella)
-const DEFAULT_VOICE_ID = '21m00Tcm4TlvDq8ikWAM';
+const GROQ_API_KEY = process.env.GROQ_API_KEY;
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const DEFAULT_VOICE = 'alloy';
 
 // POST /api/tts
-// Converts text to speech using Gemini or ElevenLabs
+// Converts text to speech using Groq PlayAI TTS
 router.post('/', async (req, res) => {
-  const { text, voiceId = DEFAULT_VOICE_ID, language = 'en' } = req.body;
+  const { text, voice = DEFAULT_VOICE, language = 'en' } = req.body;
 
   if (!text) {
     return res.status(400).json({ error: 'Text is required' });
   }
 
-  // Use Gemini TTS when enabled (no fallback to ElevenLabs)
-  if (isGeminiEnabled()) {
-    console.log('Using Gemini TTS');
-    try {
-      const geminiResult = await textToSpeech(text, language);
-      if (geminiResult && geminiResult.audio) {
-        console.log('Gemini TTS successful');
-        return res.json({
-          audio: geminiResult.audio,
-          contentType: geminiResult.contentType || 'audio/wav'
-        });
-      }
-      // Gemini TTS failed but don't fallback - return error
-      return res.status(500).json({
-        error: 'Gemini TTS failed to generate audio',
-        details: 'No audio returned from Gemini'
-      });
-    } catch (error) {
-      console.error('Gemini TTS error:', error.message);
-      return res.status(500).json({
-        error: 'Gemini TTS error',
-        details: error.message
-      });
-    }
-  }
-
-  // Only use ElevenLabs when Gemini is disabled
-  if (!ELEVENLABS_API_KEY) {
+  if (!GROQ_API_KEY) {
     return res.status(500).json({
       error: 'TTS not available',
-      setup: 'Set ELEVENLABS_API_KEY or enable Gemini with USE_GEMINI=true'
+      setup: 'Set GROQ_API_KEY in .env'
     });
   }
 
   try {
+    // Groq PlayAI TTS (fast)
+    // const response = await axios.post(
+    //   'https://api.groq.com/openai/v1/audio/speech',
+    //   {
+    //     model: 'playai-tts',
+    //     input: text,
+    //     voice: voice,
+    //     response_format: 'wav'
+    //   },
+    //   {
+    //     headers: {
+    //       'Authorization': `Bearer ${GROQ_API_KEY}`,
+    //       'Content-Type': 'application/json',
+    //     },
+    //     responseType: 'arraybuffer',
+    //   }
+    // );
+
+    // const audioBase64 = Buffer.from(response.data).toString('base64');
+
+    // res.json({
+    //   audio: audioBase64,
+    //   contentType: 'audio/wav'
+    // });
+
+    // // OpenAI TTS (slower, ~2s)
     const response = await axios.post(
-      `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
+      'https://api.openai.com/v1/audio/speech',
       {
-        text,
-        model_id: 'eleven_multilingual_v2', // Supports 29 languages
-        voice_settings: {
-          stability: 0.5,
-          similarity_boost: 0.75,
-        }
+        model: 'tts-1',
+        input: text,
+        voice: 'nova',
+        response_format: 'mp3'
       },
       {
         headers: {
-          'Accept': 'audio/mpeg',
+          'Authorization': `Bearer ${OPENAI_API_KEY}`,
           'Content-Type': 'application/json',
-          'xi-api-key': ELEVENLABS_API_KEY,
         },
         responseType: 'arraybuffer',
       }
     );
-
-    // Convert to base64 for easy frontend playback
+    
     const audioBase64 = Buffer.from(response.data).toString('base64');
-
+    
     res.json({
       audio: audioBase64,
       contentType: 'audio/mpeg'
@@ -85,40 +76,51 @@ router.post('/', async (req, res) => {
   } catch (error) {
     console.error('TTS error:', error.response?.data || error.message);
 
-    // Check for quota exceeded
     if (error.response?.status === 401) {
-      return res.status(401).json({ error: 'Invalid ElevenLabs API key' });
+      return res.status(401).json({ error: 'Invalid API key' });
     }
     if (error.response?.status === 429) {
-      return res.status(429).json({ error: 'ElevenLabs quota exceeded. Free tier: 10k chars/month' });
+      return res.status(429).json({ error: 'Rate limit exceeded' });
     }
 
     res.status(500).json({
       error: 'Text-to-speech failed',
-      details: error.response?.data?.detail || error.message
+      details: error.response?.data?.error?.message || error.message
     });
   }
 });
 
 // GET /api/tts/voices - List available voices
-router.get('/voices', async (req, res) => {
-  if (!ELEVENLABS_API_KEY) {
-    return res.status(500).json({ error: 'ElevenLabs API key not configured' });
-  }
+router.get('/voices', (req, res) => {
+  // // Groq PlayAI voices
+  // const voices = [
+  //   { id: 'Arista-PlayAI', name: 'Arista', category: 'groq-playai' },
+  //   { id: 'Atlas-PlayAI', name: 'Atlas', category: 'groq-playai' },
+  //   { id: 'Celeste-PlayAI', name: 'Celeste', category: 'groq-playai' },
+  //   { id: 'Cheyenne-PlayAI', name: 'Cheyenne', category: 'groq-playai' },
+  //   { id: 'Fritz-PlayAI', name: 'Fritz', category: 'groq-playai' },
+  //   { id: 'Gail-PlayAI', name: 'Gail', category: 'groq-playai' },
+  //   { id: 'Indigo-PlayAI', name: 'Indigo', category: 'groq-playai' },
+  //   { id: 'Jennifer-PlayAI', name: 'Jennifer', category: 'groq-playai' },
+  //   { id: 'Nova-PlayAI', name: 'Nova', category: 'groq-playai' },
+  //   { id: 'Quinn-PlayAI', name: 'Quinn', category: 'groq-playai' },
+  //   { id: 'Ruby-PlayAI', name: 'Ruby', category: 'groq-playai' },
+  // ];
 
-  try {
-    const response = await axios.get('https://api.elevenlabs.io/v1/voices', {
-      headers: { 'xi-api-key': ELEVENLABS_API_KEY }
-    });
+  // OpenAI voices
+  const voices = [
+    { id: 'nova', name: 'Nova', category: 'openai' },
+    { id: 'alloy', name: 'Alloy', category: 'openai' },
+    { id: 'ash', name: 'Ash', category: 'openai' },
+    { id: 'coral', name: 'Coral', category: 'openai' },
+    { id: 'echo', name: 'Echo', category: 'openai' },
+    { id: 'fable', name: 'Fable', category: 'openai' },
+    { id: 'onyx', name: 'Onyx', category: 'openai' },
+    { id: 'sage', name: 'Sage', category: 'openai' },
+    { id: 'shimmer', name: 'Shimmer', category: 'openai' },
+  ];
 
-    res.json(response.data.voices.map(v => ({
-      id: v.voice_id,
-      name: v.name,
-      category: v.category
-    })));
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch voices' });
-  }
+  res.json(voices);
 });
 
 module.exports = router;
