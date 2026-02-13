@@ -4,7 +4,7 @@ const router = express.Router();
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-const DEFAULT_VOICE = 'alloy';
+const DEFAULT_VOICE = 'shimmer';
 
 // POST /api/tts
 // Converts text to speech using Groq PlayAI TTS
