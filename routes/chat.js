@@ -49,9 +49,10 @@ async function openaiTTS(text) {
     const response = await axios.post(
       'https://api.openai.com/v1/audio/speech',
       {
-        model: 'tts-1',
+        model: 'tts-1-hd',
         input: text,
-        voice: 'shimmer',
+        voice: 'coral',
+        speed: 0.9,
         response_format: 'mp3'
       },
       {
