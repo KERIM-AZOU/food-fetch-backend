@@ -4,7 +4,7 @@ const router = express.Router();
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-const DEFAULT_VOICE = 'coral';
+const DEFAULT_VOICE = 'nova';
 
 // POST /api/tts
 // Converts text to speech using Groq PlayAI TTS
@@ -52,10 +52,9 @@ router.post('/', async (req, res) => {
     const response = await axios.post(
       'https://api.openai.com/v1/audio/speech',
       {
-        model: 'tts-1-hd',
+        model: 'tts-1',
         input: text,
         voice: voice,
-        speed: 0.9,
         response_format: 'mp3'
       },
       {
