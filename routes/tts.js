@@ -54,7 +54,7 @@ router.post('/', async (req, res) => {
       {
         model: 'tts-1',
         input: text,
-        voice: 'nova',
+        voice: voice,
         response_format: 'mp3'
       },
       {

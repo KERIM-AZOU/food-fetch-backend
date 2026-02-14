@@ -51,7 +51,7 @@ async function openaiTTS(text) {
       {
         model: 'tts-1',
         input: text,
-        voice: 'nova',
+        voice: 'shimmer',
         response_format: 'mp3'
       },
       {
