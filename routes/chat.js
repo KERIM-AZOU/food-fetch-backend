@@ -109,6 +109,25 @@ async function elevenLabsTTS(text) {
   }
 }
 
+// Supported languages — map similar/misdetected languages to the correct mainstream one
+const LANG_MAP = {
+  // Arabic and commonly confused with Arabic
+  ar: 'ar', fa: 'ar', ur: 'ar', ps: 'ar', sd: 'ar', ku: 'ar',
+  // English
+  en: 'en',
+  // French
+  fr: 'fr',
+  // Spanish
+  es: 'es',
+  // Other mainstream languages
+  de: 'de', it: 'it', pt: 'pt', ru: 'ru', zh: 'zh', ja: 'ja', ko: 'ko',
+  tr: 'tr', nl: 'nl', hi: 'hi', id: 'id', ms: 'ms', th: 'th',
+};
+
+function normalizeLanguage(detected) {
+  return LANG_MAP[detected] || 'en';
+}
+
 // Groq Whisper transcription (fast, ~200ms)
 async function groqTranscribe(audioBase64, mimeType = 'audio/webm') {
   if (!GROQ_API_KEY) throw new Error('GROQ_API_KEY not configured');
@@ -133,9 +152,15 @@ async function groqTranscribe(audioBase64, mimeType = 'audio/webm') {
   );
   console.log(`[TIMING] Groq Whisper — ${Date.now() - start}ms`);
 
+  const rawLang = response.data.language || 'en';
+  const language = normalizeLanguage(rawLang);
+  if (rawLang !== language) {
+    console.log(`[LANG] Corrected "${rawLang}" → "${language}"`);
+  }
+
   return {
     text: response.data.text || '',
-    language: response.data.language || 'en'
+    language
   };
 }
 
