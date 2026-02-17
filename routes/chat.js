@@ -50,8 +50,8 @@ async function openaiTTS(text) {
       {
         model: 'gpt-4o-mini-tts',
         input: text,
-        voice: 'coral',
-        instructions: 'Speak in whatever language the text is written in, as a fluent native speaker of that language. Be natural, warm, and conversational — like a friendly human chatting casually. Use natural pacing, pauses, varied intonation, and expressive tone. Never sound robotic or read word by word. Be enthusiastic about food.',
+        voice: 'ash',
+        instructions: 'You are a real person having a casual conversation, NOT a text-to-speech system. Speak in whatever language the input text is in as a native speaker. Talk like you would to a friend — relaxed, expressive, with emotion. Vary your pitch and speed naturally throughout sentences. Emphasize key words. Slow down for important parts, speed up for casual filler. Add micro-pauses between thoughts like real speech. Sound genuinely excited when talking about food. Your tone should feel like a warm podcast host, not an AI assistant.',
         response_format: 'mp3'
       },
       {
