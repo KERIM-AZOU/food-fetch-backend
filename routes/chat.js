@@ -51,6 +51,7 @@ async function openaiTTS(text) {
         model: 'gpt-4o-mini-tts',
         input: text,
         voice: 'coral',
+        instructions: 'Speak naturally and conversationally, like a friendly human in a casual chat. Use natural pacing with pauses, varied intonation, and warm expression. Never sound robotic or monotone — read full sentences fluidly, not word by word. Be enthusiastic about food topics.',
         response_format: 'mp3'
       },
       {
