@@ -51,7 +51,7 @@ async function openaiTTS(text) {
         model: 'gpt-4o-mini-tts',
         input: text,
         voice: 'coral',
-        instructions: 'Speak naturally and conversationally, like a friendly human in a casual chat. Use natural pacing with pauses, varied intonation, and warm expression. Never sound robotic or monotone — read full sentences fluidly, not word by word. Be enthusiastic about food topics.',
+        instructions: 'Speak in whatever language the text is written in, as a fluent native speaker of that language. Be natural, warm, and conversational — like a friendly human chatting casually. Use natural pacing, pauses, varied intonation, and expressive tone. Never sound robotic or read word by word. Be enthusiastic about food.',
         response_format: 'mp3'
       },
       {
@@ -136,7 +136,6 @@ async function groqTranscribe(audioBase64, mimeType = 'audio/webm') {
 
 // Active TTS: OpenAI
 async function textToSpeech(text) {
-  // return groqTTS(text);
   return openaiTTS(text);
 }
 
