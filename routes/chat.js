@@ -5,7 +5,6 @@ const FormData = require('form-data');
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-console.log('OpenAI API Key:', OPENAI_API_KEY);
 // Groq TTS with PlayAI (fast)
 // async function groqTTS(text) {
 //   if (!GROQ_API_KEY) return null;
@@ -49,9 +48,9 @@ async function openaiTTS(text) {
     const response = await axios.post(
       'https://api.openai.com/v1/audio/speech',
       {
-        model: 'tts-1',
+        model: 'gpt-4o-mini-tts',
         input: text,
-        voice: 'nova',
+        voice: 'coral',
         response_format: 'mp3'
       },
       {
