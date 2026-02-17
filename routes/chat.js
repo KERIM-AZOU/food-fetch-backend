@@ -5,6 +5,8 @@ const FormData = require('form-data');
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
+const ELEVENLABS_VOICE_ID = 'EXAVITQu4vr4xnSDxMaL'; // Bella (warm, friendly)
 // Groq TTS with PlayAI (fast)
 // async function groqTTS(text) {
 //   if (!GROQ_API_KEY) return null;
@@ -39,37 +41,70 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 //   }
 // }
 
-// // OpenAI TTS with nova voice (slower, ~2s)
-async function openaiTTS(text) {
-  if (!OPENAI_API_KEY) return null;
+// OpenAI TTS (commented out — using ElevenLabs for better Arabic)
+// async function openaiTTS(text) {
+//   if (!OPENAI_API_KEY) return null;
+//   try {
+//     const start = Date.now();
+//     const response = await axios.post(
+//       'https://api.openai.com/v1/audio/speech',
+//       {
+//         model: 'gpt-4o-mini-tts',
+//         input: text,
+//         voice: 'coral',
+//         instructions: 'Affect: warm and friendly.\n\nTone: casual, like chatting with a friend.\n\nPronunciation: native fluency in whatever language the text is in.\n\nEmotion: genuinely enthusiastic about food.',
+//         response_format: 'mp3'
+//       },
+//       {
+//         headers: {
+//           'Authorization': `Bearer ${OPENAI_API_KEY}`,
+//           'Content-Type': 'application/json',
+//         },
+//         responseType: 'arraybuffer',
+//         timeout: 15000
+//       }
+//     );
+//     console.log(`[TIMING] OpenAI TTS — ${Date.now() - start}ms`);
+//     return {
+//       data: Buffer.from(response.data).toString('base64'),
+//       contentType: 'audio/mpeg'
+//     };
+//   } catch (err) {
+//     console.error('OpenAI TTS error:', err.response?.status, err.response?.data ? JSON.stringify(err.response.data) : err.message);
+//     return null;
+//   }
+// }
+
+// ElevenLabs TTS (best Arabic quality)
+async function elevenLabsTTS(text) {
+  if (!ELEVENLABS_API_KEY) return null;
 
   try {
     const start = Date.now();
     const response = await axios.post(
-      'https://api.openai.com/v1/audio/speech',
+      `https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}`,
       {
-        model: 'gpt-4o-mini-tts',
-        input: text,
-        voice: 'coral',
-        instructions: 'Affect: warm and friendly.\n\nTone: casual, like chatting with a friend.\n\nPronunciation: native fluency in whatever language the text is in.\n\nEmotion: genuinely enthusiastic about food.',
-        response_format: 'mp3'
+        text,
+        model_id: 'eleven_multilingual_v2',
+        voice_settings: { stability: 0.4, similarity_boost: 0.75, style: 0.6 }
       },
       {
         headers: {
-          'Authorization': `Bearer ${OPENAI_API_KEY}`,
+          'Accept': 'audio/mpeg',
           'Content-Type': 'application/json',
+          'xi-api-key': ELEVENLABS_API_KEY,
         },
         responseType: 'arraybuffer',
         timeout: 15000
       }
     );
-    console.log(`[TIMING] OpenAI TTS — ${Date.now() - start}ms`);
+    console.log(`[TIMING] ElevenLabs TTS — ${Date.now() - start}ms`);
     return {
       data: Buffer.from(response.data).toString('base64'),
       contentType: 'audio/mpeg'
     };
   } catch (err) {
-    console.error('OpenAI TTS error:', err.response?.status, err.response?.data ? JSON.stringify(err.response.data) : err.message);
+    console.error('ElevenLabs TTS error:', err.response?.status, err.response?.data ? JSON.stringify(err.response.data) : err.message);
     return null;
   }
 }
@@ -134,9 +169,9 @@ async function groqTranscribe(audioBase64, mimeType = 'audio/webm') {
 //   };
 // }
 
-// Active TTS: OpenAI
+// Active TTS: ElevenLabs
 async function textToSpeech(text) {
-  return openaiTTS(text);
+  return elevenLabsTTS(text);
 }
 
 // Active transcription: Groq Whisper
