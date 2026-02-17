@@ -129,7 +129,7 @@ function normalizeLanguage(detected) {
 }
 
 // Groq Whisper transcription (fast, ~200ms)
-async function groqTranscribe(audioBase64, mimeType = 'audio/webm') {
+async function groqTranscribe(audioBase64, mimeType = 'audio/webm', languageHint = null) {
   if (!GROQ_API_KEY) throw new Error('GROQ_API_KEY not configured');
 
   const audioBuffer = Buffer.from(audioBase64, 'base64');
@@ -139,6 +139,10 @@ async function groqTranscribe(audioBase64, mimeType = 'audio/webm') {
   form.append('file', audioBuffer, { filename: `audio.${ext}`, contentType: mimeType });
   form.append('model', 'whisper-large-v3-turbo');
   form.append('response_format', 'verbose_json');
+  // Pass language hint to Whisper so it doesn't misdetect Arabic as Icelandic/Farsi/etc
+  if (languageHint) {
+    form.append('language', languageHint);
+  }
 
   const start = Date.now();
   const response = await axios.post(
@@ -200,8 +204,8 @@ async function textToSpeech(text) {
 }
 
 // Active transcription: Groq Whisper
-async function transcribeAudio(audioBase64, mimeType) {
-  return groqTranscribe(audioBase64, mimeType);
+async function transcribeAudio(audioBase64, mimeType, languageHint = null) {
+  return groqTranscribe(audioBase64, mimeType, languageHint);
   // return openaiTranscribe(audioBase64, mimeType);
 }
 
@@ -356,9 +360,13 @@ router.post('/audio', async (req, res) => {
     const routeStart = Date.now();
     console.log(`Received audio: ${audio.length} chars base64, type: ${mimeType}`);
 
+    // Use conversation's last known language as hint, default to Arabic (Saudi market)
+    const existingConvo = conversations.get(sessionId);
+    const languageHint = existingConvo?.language || 'ar';
+
     // Transcribe audio to text - returns { text, language }
     let stepStart = Date.now();
-    const transcriptionResult = await transcribeAudio(audio, mimeType);
+    const transcriptionResult = await transcribeAudio(audio, mimeType, languageHint);
     const transcript = transcriptionResult?.text || '';
     const detectedLanguage = transcriptionResult?.language || 'en';
     console.log(`[TIMING] /chat/audio transcribe — ${Date.now() - stepStart}ms`);
