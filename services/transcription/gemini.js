@@ -7,12 +7,10 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
  * Latency: ~1-2s | Quality: good | Cost: varies
  * Supports multilingual audio, good for Arabic
  */
-async function transcribe(audioBase64, mimeType = 'audio/webm', { languageHint = null } = {}) {
+async function transcribe(audioBase64, mimeType = 'audio/webm') {
   if (!GEMINI_API_KEY) throw new Error('GEMINI_API_KEY not configured');
 
-  const prompt = languageHint
-    ? `Transcribe this audio. The language is likely ${languageHint}. Return ONLY the transcription text, nothing else.`
-    : 'Transcribe this audio. Return ONLY the transcription text, nothing else. Also detect the language.';
+  const prompt = 'Transcribe this audio. Return JSON: {"text":"transcription","language":"ISO 639-1 code"}. Nothing else.';
 
   try {
     const start = Date.now();
@@ -39,13 +37,16 @@ async function transcribe(audioBase64, mimeType = 'audio/webm', { languageHint =
       }
     );
 
-    const text = response.data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const raw = response.data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
     console.log(`[TIMING] Gemini Transcription — ${Date.now() - start}ms`);
 
-    return {
-      text: text.trim(),
-      language: languageHint || 'en'
-    };
+    // Try to parse JSON response, fallback to raw text
+    try {
+      const parsed = JSON.parse(raw);
+      return { text: parsed.text || raw.trim(), language: parsed.language || 'en' };
+    } catch {
+      return { text: raw.trim(), language: 'en' };
+    }
   } catch (err) {
     console.error('Gemini transcription error:', err.response?.status, err.response?.data ? JSON.stringify(err.response.data) : err.message);
     throw err;

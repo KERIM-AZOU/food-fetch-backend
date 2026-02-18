@@ -22,8 +22,8 @@ async function textToSpeech(text) {
   return ttsProvider.synthesize(text);
 }
 
-async function transcribeAudio(audioBase64, mimeType, languageHint = null) {
-  return transcriptionProvider.transcribe(audioBase64, mimeType, { languageHint });
+async function transcribeAudio(audioBase64, mimeType) {
+  return transcriptionProvider.transcribe(audioBase64, mimeType);
 }
 
 async function chat(userMessage, conversationHistory = [], language = 'en') {
@@ -196,15 +196,11 @@ router.post('/audio', async (req, res) => {
     const routeStart = Date.now();
     console.log(`Received audio: ${audio.length} chars base64, type: ${mimeType}`);
 
-    // Use conversation's last known language as hint, default to Arabic (Saudi market)
-    const existingConvo = conversations.get(sessionId);
-    const languageHint = existingConvo?.language || 'ar';
-
-    // Transcribe audio to text - returns { text, language }
+    // Transcribe audio — language is auto-detected by Whisper
     let stepStart = Date.now();
     let transcriptionResult;
     try {
-      transcriptionResult = await transcribeAudio(audio, mimeType, languageHint);
+      transcriptionResult = await transcribeAudio(audio, mimeType);
     } catch (err) {
       console.error('Transcription error details:', JSON.stringify(err.response?.data || err.message));
       throw err;

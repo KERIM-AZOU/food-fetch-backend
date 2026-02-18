@@ -3,12 +3,10 @@ const FormData = require('form-data');
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
-// Map misdetected languages to the correct one (Whisper quirks)
+// Map close-to-Arabic languages to Arabic, normalize others
 const LANG_MAP = {
   ar: 'ar', fa: 'ar', ur: 'ar', ps: 'ar', sd: 'ar', ku: 'ar',
-  en: 'en',
-  fr: 'fr',
-  es: 'es',
+  en: 'en', fr: 'fr', es: 'es',
   de: 'de', it: 'it', pt: 'pt', ru: 'ru', zh: 'zh', ja: 'ja', ko: 'ko',
   tr: 'tr', nl: 'nl', hi: 'hi', id: 'id', ms: 'ms', th: 'th',
 };
@@ -22,7 +20,7 @@ function normalizeLanguage(detected) {
  * Latency: ~200ms | Quality: excellent | Cost: free tier available
  * 10x faster than OpenAI, same Whisper model family
  */
-async function transcribe(audioBase64, mimeType = 'audio/webm', { languageHint = null } = {}) {
+async function transcribe(audioBase64, mimeType = 'audio/webm') {
   if (!GROQ_API_KEY) throw new Error('GROQ_API_KEY not configured');
 
   const audioBuffer = Buffer.from(audioBase64, 'base64');
@@ -32,9 +30,7 @@ async function transcribe(audioBase64, mimeType = 'audio/webm', { languageHint =
   form.append('file', audioBuffer, { filename: `audio.${ext}`, contentType: mimeType });
   form.append('model', 'whisper-large-v3-turbo');
   form.append('response_format', 'verbose_json');
-  if (languageHint) {
-    form.append('language', languageHint);
-  }
+  // No language hint — let Whisper auto-detect
 
   const start = Date.now();
   const response = await axios.post(
