@@ -12,6 +12,12 @@ const ttsProvider = require('../services/tts/elevenlabs');
 const transcriptionProvider = require('../services/transcription/openai');
 // const transcriptionProvider = require('../services/transcription/gemini');
 
+// ── Chat provider: swap import to change provider ──
+const chatProvider = require('../services/chat/groq');
+// const chatProvider = require('../services/chat/openai');
+
+const { buildMessages, parseAIResponse, generateGreeting } = require('../services/chatService');
+
 async function textToSpeech(text) {
   return ttsProvider.synthesize(text);
 }
@@ -20,7 +26,26 @@ async function transcribeAudio(audioBase64, mimeType, languageHint = null) {
   return transcriptionProvider.transcribe(audioBase64, mimeType, { languageHint });
 }
 
-const { chat, generateGreeting } = require('../services/chatService');
+async function chat(userMessage, conversationHistory = [], language = 'en') {
+  const messages = buildMessages(userMessage, conversationHistory, language);
+  try {
+    const responseText = await chatProvider.chat(messages);
+    return parseAIResponse(responseText);
+  } catch (error) {
+    console.error('Chat provider error:', error.response?.data || error.message);
+
+    if (error.response?.status === 429) {
+      return {
+        response: language === 'ar' ? "لحظة، جاري المحاولة..." : "I'm a bit busy right now. Give me a moment and try again!",
+        foodMentioned: false,
+        foodItems: [],
+        shouldSearch: false
+      };
+    }
+
+    throw error;
+  }
+}
 
 // In-memory conversation storage (use Redis/DB in production for multi-server)
 const conversations = new Map();
@@ -119,7 +144,7 @@ router.post('/start', async (req, res) => {
     const routeStart = Date.now();
 
     // Generate greeting in the user's language
-    const result = await generateGreeting(language);
+    const result = generateGreeting(language);
     console.log(`[TIMING] /chat/start greeting — ${Date.now() - routeStart}ms`);
 
     // Initialize conversation
@@ -177,7 +202,13 @@ router.post('/audio', async (req, res) => {
 
     // Transcribe audio to text - returns { text, language }
     let stepStart = Date.now();
-    const transcriptionResult = await transcribeAudio(audio, mimeType, languageHint);
+    let transcriptionResult;
+    try {
+      transcriptionResult = await transcribeAudio(audio, mimeType, languageHint);
+    } catch (err) {
+      console.error('Transcription error details:', JSON.stringify(err.response?.data || err.message));
+      throw err;
+    }
     const transcript = transcriptionResult?.text || '';
     const detectedLanguage = transcriptionResult?.language || 'en';
     console.log(`[TIMING] /chat/audio transcribe — ${Date.now() - stepStart}ms`);

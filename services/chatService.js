@@ -1,15 +1,7 @@
 /**
- * Chat Service - Groq Llama (fast) with OpenAI fallback
- * Handles AI conversations with food detection capability
+ * Chat Service - shared logic for AI conversations with food detection
+ * Provider-specific code lives in services/chat/{groq,openai}.js
  */
-const axios = require('axios');
-
-const GROQ_API_KEY = process.env.GROQ_API_KEY;
-const GROQ_MODEL = 'llama-3.3-70b-versatile';
-
-// // OpenAI (slower, ~2s but more reliable)
-// const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-// const OPENAI_MODEL = 'gpt-4o-mini';
 
 // System prompt
 function getChatSystemPrompt(language = 'en') {
@@ -89,135 +81,27 @@ function parseAIResponse(text) {
 }
 
 /**
- * Chat with Groq Llama - handles conversation with food detection
- * @param {string} userMessage - The user's message
- * @param {Array} conversationHistory - Previous messages for context
- * @param {string} language - User's detected language code (e.g., 'en', 'ar', 'no')
- * @returns {Promise<{response: string, foodMentioned: boolean, foodItems: string[], shouldSearch: boolean}>}
+ * Build the messages array for the chat provider
  */
-async function chat(userMessage, conversationHistory = [], language = 'en') {
-  if (!GROQ_API_KEY) {
-    throw new Error('GROQ_API_KEY not configured');
+function buildMessages(userMessage, conversationHistory = [], language = 'en') {
+  const messages = [
+    { role: 'system', content: getChatSystemPrompt(language) }
+  ];
+
+  const recentHistory = conversationHistory.slice(-10);
+  for (const msg of recentHistory) {
+    messages.push({
+      role: msg.role === 'user' ? 'user' : 'assistant',
+      content: msg.content
+    });
   }
 
-  try {
-    const messages = [
-      { role: 'system', content: getChatSystemPrompt(language) }
-    ];
-
-    const recentHistory = conversationHistory.slice(-10);
-    for (const msg of recentHistory) {
-      messages.push({
-        role: msg.role === 'user' ? 'user' : 'assistant',
-        content: msg.content
-      });
-    }
-
-    messages.push({ role: 'user', content: userMessage });
-
-    const start = Date.now();
-    console.log('[TIMING] Groq chat — request started');
-    const result = await axios.post(
-      'https://api.groq.com/openai/v1/chat/completions',
-      {
-        model: GROQ_MODEL,
-        messages,
-        temperature: 0.7,
-        max_tokens: 150,
-        response_format: { type: 'json_object' }
-      },
-      {
-        headers: {
-          'Authorization': `Bearer ${GROQ_API_KEY}`,
-          'Content-Type': 'application/json'
-        }
-      }
-    );
-    console.log(`[TIMING] Groq chat — ${Date.now() - start}ms`);
-
-    const responseText = result.data.choices?.[0]?.message?.content || '';
-    return parseAIResponse(responseText);
-
-  } catch (error) {
-    console.error('Groq chat error:', error.response?.data || error.message);
-
-    if (error.response?.status === 429) {
-      return {
-        response: language === 'ar' ? "لحظة، جاري المحاولة..." : "I'm a bit busy right now. Give me a moment and try again!",
-        foodMentioned: false,
-        foodItems: [],
-        shouldSearch: false
-      };
-    }
-
-    throw error;
-  }
+  messages.push({ role: 'user', content: userMessage });
+  return messages;
 }
-
-// // OpenAI chat (slower, ~2s but more reliable JSON)
-// async function chat(userMessage, conversationHistory = [], language = 'en') {
-//   if (!OPENAI_API_KEY) {
-//     throw new Error('OPENAI_API_KEY not configured');
-//   }
-//
-//   try {
-//     const messages = [
-//       { role: 'system', content: getChatSystemPrompt(language) }
-//     ];
-//
-//     const recentHistory = conversationHistory.slice(-10);
-//     for (const msg of recentHistory) {
-//       messages.push({
-//         role: msg.role === 'user' ? 'user' : 'assistant',
-//         content: msg.content
-//       });
-//     }
-//
-//     messages.push({ role: 'user', content: userMessage });
-//
-//     const start = Date.now();
-//     console.log('[TIMING] OpenAI chat — request started');
-//     const result = await axios.post(
-//       'https://api.openai.com/v1/chat/completions',
-//       {
-//         model: OPENAI_MODEL,
-//         messages,
-//         temperature: 0.7,
-//         max_tokens: 150,
-//         response_format: { type: 'json_object' }
-//       },
-//       {
-//         headers: {
-//           'Authorization': `Bearer ${OPENAI_API_KEY}`,
-//           'Content-Type': 'application/json'
-//         }
-//       }
-//     );
-//     console.log(`[TIMING] OpenAI chat — ${Date.now() - start}ms`);
-//
-//     const responseText = result.data.choices?.[0]?.message?.content || '';
-//     return parseAIResponse(responseText);
-//
-//   } catch (error) {
-//     console.error('OpenAI chat error:', error.response?.data || error.message);
-//
-//     if (error.response?.status === 429) {
-//       return {
-//         response: language === 'ar' ? "لحظة، جاري المحاولة..." : "I'm a bit busy right now. Give me a moment and try again!",
-//         foodMentioned: false,
-//         foodItems: [],
-//         shouldSearch: false
-//       };
-//     }
-//
-//     throw error;
-//   }
-// }
 
 /**
  * Generate a greeting message in the user's language
- * @param {string} language - Language code (e.g., 'en', 'ar', 'fr')
- * @returns {{greeting: string}}
  */
 function generateGreeting(language = 'en') {
   const greetings = {
@@ -242,7 +126,7 @@ function generateGreeting(language = 'en') {
 }
 
 module.exports = {
-  chat,
-  generateGreeting,
-  parseAIResponse
+  buildMessages,
+  parseAIResponse,
+  generateGreeting
 };
