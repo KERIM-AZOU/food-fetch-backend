@@ -66,22 +66,13 @@ function parseAIResponse(text) {
 
 /**
  * Build the messages array for the chat provider
+ * No conversation history — keeps language clean and TTS consistent
  */
-function buildMessages(userMessage, conversationHistory = [], language = 'en') {
-  const messages = [
-    { role: 'system', content: getChatSystemPrompt(language) }
+function buildMessages(userMessage, language = 'en') {
+  return [
+    { role: 'system', content: getChatSystemPrompt(language) },
+    { role: 'user', content: userMessage }
   ];
-
-  const recentHistory = conversationHistory.slice(-10);
-  for (const msg of recentHistory) {
-    messages.push({
-      role: msg.role === 'user' ? 'user' : 'assistant',
-      content: msg.content
-    });
-  }
-
-  messages.push({ role: 'user', content: userMessage });
-  return messages;
 }
 
 /**

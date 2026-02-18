@@ -26,8 +26,8 @@ async function transcribeAudio(audioBase64, mimeType) {
   return transcriptionProvider.transcribe(audioBase64, mimeType);
 }
 
-async function chat(userMessage, conversationHistory = [], language = 'en') {
-  const messages = buildMessages(userMessage, conversationHistory, language);
+async function chat(userMessage, language = 'en') {
+  const messages = buildMessages(userMessage, language);
   try {
     const responseText = await chatProvider.chat(messages);
     return parseAIResponse(responseText);
@@ -82,7 +82,7 @@ router.post('/', async (req, res) => {
 
     // Get AI response
     let stepStart = Date.now();
-    const result = await chat(message, conversation.history, language);
+    const result = await chat(message, language);
     console.log(`[TIMING] /chat text chat — ${Date.now() - stepStart}ms`);
 
     // Update conversation history
@@ -233,7 +233,7 @@ router.post('/audio', async (req, res) => {
 
     // Process the transcribed text with detected language
     stepStart = Date.now();
-    const result = await chat(transcript, conversation.history, detectedLanguage);
+    const result = await chat(transcript, detectedLanguage);
     console.log(`[TIMING] /chat/audio chat — ${Date.now() - stepStart}ms`);
 
     // Update history
