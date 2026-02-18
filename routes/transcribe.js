@@ -1,10 +1,10 @@
 const express = require('express');
-const axios = require('axios');
-const FormData = require('form-data');
 const router = express.Router();
 
-const GROQ_API_KEY = process.env.GROQ_API_KEY;
-// const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+// ── Transcription provider: swap import to change provider ──
+const transcriptionProvider = require('../services/transcription/groq');
+// const transcriptionProvider = require('../services/transcription/openai');
+// const transcriptionProvider = require('../services/transcription/gemini');
 
 // Common Whisper hallucinations to filter out (happens with silence/noise)
 const HALLUCINATION_PATTERNS = [
@@ -19,7 +19,7 @@ const HALLUCINATION_PATTERNS = [
   /^goodbye\.?$/i,
   /^thank you\.?$/i,
   /^you$/i,
-  /^\s*$/,  // Empty or whitespace only
+  /^\s*$/,
 ];
 
 function isHallucination(text) {
@@ -30,7 +30,6 @@ function isHallucination(text) {
 }
 
 // POST /api/transcribe
-// Accepts audio as base64 in JSON body
 router.post('/', async (req, res) => {
   const { audio, mimeType = 'audio/webm' } = req.body;
 
@@ -39,51 +38,10 @@ router.post('/', async (req, res) => {
   }
 
   try {
-    // Convert base64 to buffer
-    const audioBuffer = Buffer.from(audio, 'base64');
+    const result = await transcriptionProvider.transcribe(audio, mimeType);
 
-    // Determine file extension from mime type
-    const ext = mimeType.includes('webm') ? 'webm' : mimeType.includes('mp3') ? 'mp3' : 'wav';
-
-    // Create form data
-    const form = new FormData();
-    form.append('file', audioBuffer, {
-      filename: `audio.${ext}`,
-      contentType: mimeType,
-    });
-    form.append('model', 'whisper-large-v3-turbo');
-    form.append('response_format', 'verbose_json');
-
-    // Groq Whisper API (fast, ~200ms)
-    const response = await axios.post(
-      'https://api.groq.com/openai/v1/audio/transcriptions',
-      form,
-      {
-        headers: {
-          'Authorization': `Bearer ${GROQ_API_KEY}`,
-          ...form.getHeaders(),
-        },
-        maxContentLength: Infinity,
-        maxBodyLength: Infinity,
-      }
-    );
-
-    // // OpenAI Whisper API (slower, ~2s)
-    // const response = await axios.post(
-    //   'https://api.openai.com/v1/audio/transcriptions',
-    //   form,
-    //   {
-    //     headers: {
-    //       'Authorization': `Bearer ${OPENAI_API_KEY}`,
-    //       ...form.getHeaders(),
-    //     },
-    //     maxContentLength: Infinity,
-    //     maxBodyLength: Infinity,
-    //   }
-    // );
-
-    const detectedLanguage = response.data.language || 'en';
-    const rawText = response.data.text || '';
+    const rawText = result.text || '';
+    const detectedLanguage = result.language || 'en';
 
     // Filter out Whisper hallucinations (common with silence/background noise)
     if (isHallucination(rawText)) {

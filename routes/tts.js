@@ -1,76 +1,33 @@
 const express = require('express');
-const axios = require('axios');
 const router = express.Router();
 
-const GROQ_API_KEY = process.env.GROQ_API_KEY;
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-const DEFAULT_VOICE = 'nova';
+// ── TTS provider: swap import to change provider ──
+// const ttsProvider = require('../services/tts/groq');
+const ttsProvider = require('../services/tts/gemini');
+// const ttsProvider = require('../services/tts/elevenlabs');
+// const ttsProvider = require('../services/tts/openai');
 
 // POST /api/tts
-// Converts text to speech using Groq PlayAI TTS
 router.post('/', async (req, res) => {
-  const { text, voice = DEFAULT_VOICE, language = 'en' } = req.body;
+  const { text, voice = ttsProvider.DEFAULT_VOICE, language = 'en' } = req.body;
 
   if (!text) {
     return res.status(400).json({ error: 'Text is required' });
   }
 
-  if (!GROQ_API_KEY) {
-    return res.status(500).json({
-      error: 'TTS not available',
-      setup: 'Set GROQ_API_KEY in .env'
-    });
-  }
-
   try {
-    // Groq PlayAI TTS (fast)
-    // const response = await axios.post(
-    //   'https://api.groq.com/openai/v1/audio/speech',
-    //   {
-    //     model: 'playai-tts',
-    //     input: text,
-    //     voice: voice,
-    //     response_format: 'wav'
-    //   },
-    //   {
-    //     headers: {
-    //       'Authorization': `Bearer ${GROQ_API_KEY}`,
-    //       'Content-Type': 'application/json',
-    //     },
-    //     responseType: 'arraybuffer',
-    //   }
-    // );
+    const result = await ttsProvider.synthesize(text, { voice });
 
-    // const audioBase64 = Buffer.from(response.data).toString('base64');
+    if (!result) {
+      return res.status(500).json({
+        error: 'TTS not available',
+        setup: 'Check your API key in .env'
+      });
+    }
 
-    // res.json({
-    //   audio: audioBase64,
-    //   contentType: 'audio/wav'
-    // });
-
-    // // OpenAI TTS (slower, ~2s)
-    const response = await axios.post(
-      'https://api.openai.com/v1/audio/speech',
-      {
-        model: 'tts-1',
-        input: text,
-        voice: voice,
-        response_format: 'mp3'
-      },
-      {
-        headers: {
-          'Authorization': `Bearer ${OPENAI_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        responseType: 'arraybuffer',
-      }
-    );
-    
-    const audioBase64 = Buffer.from(response.data).toString('base64');
-    
     res.json({
-      audio: audioBase64,
-      contentType: 'audio/mpeg'
+      audio: result.data,
+      contentType: result.contentType
     });
 
   } catch (error) {
@@ -90,37 +47,9 @@ router.post('/', async (req, res) => {
   }
 });
 
-// GET /api/tts/voices - List available voices
+// GET /api/tts/voices - List available voices for current provider
 router.get('/voices', (req, res) => {
-  // // Groq PlayAI voices
-  // const voices = [
-  //   { id: 'Arista-PlayAI', name: 'Arista', category: 'groq-playai' },
-  //   { id: 'Atlas-PlayAI', name: 'Atlas', category: 'groq-playai' },
-  //   { id: 'Celeste-PlayAI', name: 'Celeste', category: 'groq-playai' },
-  //   { id: 'Cheyenne-PlayAI', name: 'Cheyenne', category: 'groq-playai' },
-  //   { id: 'Fritz-PlayAI', name: 'Fritz', category: 'groq-playai' },
-  //   { id: 'Gail-PlayAI', name: 'Gail', category: 'groq-playai' },
-  //   { id: 'Indigo-PlayAI', name: 'Indigo', category: 'groq-playai' },
-  //   { id: 'Jennifer-PlayAI', name: 'Jennifer', category: 'groq-playai' },
-  //   { id: 'Nova-PlayAI', name: 'Nova', category: 'groq-playai' },
-  //   { id: 'Quinn-PlayAI', name: 'Quinn', category: 'groq-playai' },
-  //   { id: 'Ruby-PlayAI', name: 'Ruby', category: 'groq-playai' },
-  // ];
-
-  // OpenAI voices
-  const voices = [
-    { id: 'nova', name: 'Nova', category: 'openai' },
-    { id: 'alloy', name: 'Alloy', category: 'openai' },
-    { id: 'ash', name: 'Ash', category: 'openai' },
-    { id: 'coral', name: 'Coral', category: 'openai' },
-    { id: 'echo', name: 'Echo', category: 'openai' },
-    { id: 'fable', name: 'Fable', category: 'openai' },
-    { id: 'onyx', name: 'Onyx', category: 'openai' },
-    { id: 'sage', name: 'Sage', category: 'openai' },
-    { id: 'shimmer', name: 'Shimmer', category: 'openai' },
-  ];
-
-  res.json(voices);
+  res.json(ttsProvider.VOICES);
 });
 
 module.exports = router;
