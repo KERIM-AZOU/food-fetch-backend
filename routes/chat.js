@@ -138,13 +138,13 @@ router.post('/', async (req, res) => {
  * Body: { sessionId?: string, generateAudio?: boolean }
  */
 router.post('/start', async (req, res) => {
-  const { sessionId = `session_${Date.now()}_${Math.random().toString(36).slice(2)}`, generateAudio = true, language = 'ar' } = req.body;
+  const { sessionId = `session_${Date.now()}_${Math.random().toString(36).slice(2)}`, generateAudio = true } = req.body;
 
   try {
     const routeStart = Date.now();
 
-    // Generate greeting in the user's language
-    const result = generateGreeting(language);
+    // Always greet in Arabic (Saudi market)
+    const result = generateGreeting('ar');
     console.log(`[TIMING] /chat/start greeting — ${Date.now() - routeStart}ms`);
 
     // Initialize conversation
