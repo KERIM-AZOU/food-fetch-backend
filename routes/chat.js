@@ -9,8 +9,8 @@ const ttsProvider = require('../services/tts/elevenlabs');
 
 // ── Transcription provider: swap import to change provider ──
 // const transcriptionProvider = require('../services/transcription/groq');
-// const transcriptionProvider = require('../services/transcription/openai');
-const transcriptionProvider = require('../services/transcription/gemini');
+const transcriptionProvider = require('../services/transcription/openai');
+// const transcriptionProvider = require('../services/transcription/gemini');
 
 async function textToSpeech(text) {
   return ttsProvider.synthesize(text);
