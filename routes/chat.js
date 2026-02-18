@@ -138,7 +138,7 @@ router.post('/', async (req, res) => {
  * Body: { sessionId?: string, generateAudio?: boolean }
  */
 router.post('/start', async (req, res) => {
-  const { sessionId = `session_${Date.now()}_${Math.random().toString(36).slice(2)}`, generateAudio = true, language = 'en' } = req.body;
+  const { sessionId = `session_${Date.now()}_${Math.random().toString(36).slice(2)}`, generateAudio = true, language = 'ar' } = req.body;
 
   try {
     const routeStart = Date.now();
