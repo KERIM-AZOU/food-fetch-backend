@@ -20,12 +20,13 @@ Respond with ONLY this JSON:
 
 - foodItems: English only. e.g. user says "بيتزا" → foodItems: ["pizza"]
 - shouldSearch: true when foodItems is not empty
+- IMPORTANT: when shouldSearch is true, response MUST be "" (empty string). Do NOT say anything. The app will announce results after search.
 - shouldStop: true when user says bye/goodbye/done
 
 Examples:
 User (ar): "أهلاً كيف حالك" → {"response":"هلا والله! تمام الحمدلله، وش تبي تاكل اليوم؟","foodMentioned":false,"foodItems":[],"shouldSearch":false,"shouldStop":false}
-User (ar): "أبي بيتزا" → {"response":"يلا أجيب لك بيتزا! تبيها بأي نوع؟","foodMentioned":true,"foodItems":["pizza"],"shouldSearch":true,"shouldStop":false}
-User (en): "I want burger" → {"response":"On it! Any toppings you want?","foodMentioned":true,"foodItems":["burger"],"shouldSearch":true,"shouldStop":false}`;
+User (ar): "أبي بيتزا" → {"response":"","foodMentioned":true,"foodItems":["pizza"],"shouldSearch":true,"shouldStop":false}
+User (en): "I want burger" → {"response":"","foodMentioned":true,"foodItems":["burger"],"shouldSearch":true,"shouldStop":false}`;
 }
 
 /**
@@ -104,8 +105,55 @@ function generateGreeting(language = 'en') {
   };
 }
 
+/**
+ * Generate a spoken summary of search results
+ * Reads the first product: name, platform, price
+ */
+function generateResultSummary(products, language = 'en') {
+  if (!products || products.length === 0) {
+    const noResults = {
+      ar: 'ما لقيت شي، جرب شي ثاني؟',
+      tr: 'Bir şey bulamadım, başka bir şey dene?',
+      fr: 'Je n\'ai rien trouvé, essaie autre chose ?',
+      es: 'No encontré nada, ¿pruebas otra cosa?',
+    };
+    return noResults[language] || 'No results found, try something else?';
+  }
+
+  const first = products[0];
+  const name = first.product_name || '';
+  const source = first.source || '';
+  const price = first.product_price;
+  const count = products.length;
+
+  // Get unique platforms
+  const platforms = [...new Set(products.map(p => p.source))].join(', ');
+
+  if (language === 'ar') {
+    const priceText = price ? ` بسعر ${price}` : '';
+    return `لقيت ${name}${priceText} من ${source}، عندي ${count} نتيجة من ${platforms}`;
+  }
+  if (language === 'tr') {
+    const priceText = price ? ` ${price} TL` : '';
+    return `${name} buldum${priceText}, ${source}'da. ${count} sonuç var, ${platforms} üzerinden`;
+  }
+  if (language === 'fr') {
+    const priceText = price ? ` à ${price}` : '';
+    return `J'ai trouvé ${name}${priceText} sur ${source}. ${count} résultats sur ${platforms}`;
+  }
+  if (language === 'es') {
+    const priceText = price ? ` por ${price}` : '';
+    return `Encontré ${name}${priceText} en ${source}. ${count} resultados en ${platforms}`;
+  }
+
+  // Default: English
+  const priceText = price ? ` for ${price}` : '';
+  return `Found ${name}${priceText} on ${source}. ${count} results from ${platforms}`;
+}
+
 module.exports = {
   buildMessages,
   parseAIResponse,
-  generateGreeting
+  generateGreeting,
+  generateResultSummary
 };
