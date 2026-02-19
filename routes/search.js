@@ -3,7 +3,7 @@ const router = express.Router();
 const { searchSnoonu } = require('../platforms/snoonu');
 const { searchRafeeq } = require('../platforms/rafeeq');
 const { searchTalabat } = require('../platforms/talabat');
-const { searchYemeksepeti } = require('../platforms/yemeksepeti');
+const { searchTgoyemek } = require('../platforms/tgoyemek');
 const {
   groupProductsBySimilarity,
   applyFilters,
@@ -25,7 +25,7 @@ const REGIONS = {
   turkey: {
     lat: 41.076703,
     lon: 29.010804,
-    platforms: ['yemeksepeti']
+    platforms: ['tgoyemek']
   }
 };
 
@@ -34,7 +34,7 @@ const PLATFORM_SEARCH = {
   snoonu: searchSnoonu,
   rafeeq: searchRafeeq,
   talabat: searchTalabat,
-  yemeksepeti: searchYemeksepeti
+  tgoyemek: searchTgoyemek
 };
 
 // POST /api/search
@@ -76,13 +76,13 @@ router.post('/', async (req, res) => {
     }
 
     const results = await Promise.all(platformPromises);
-    let allProducts = results.flat();
+    let allItems = results.flat();
 
-    // Get all restaurants before filtering
-    const allRestaurants = getAllRestaurants(allProducts);
+    const { language = 'en', generateAudio = false } = req.body;
 
-    // Apply filters
-    allProducts = applyFilters(allProducts, {
+    const allRestaurants = getAllRestaurants(allItems);
+
+    allItems = applyFilters(allItems, {
       price_min,
       price_max,
       time_min,
@@ -90,15 +90,10 @@ router.post('/', async (req, res) => {
       restaurant_filter
     });
 
-    // Group products by similarity
-    const groupedProducts = groupProductsBySimilarity(allProducts, sort);
-
-    // Paginate results
+    const groupedProducts = groupProductsBySimilarity(allItems, sort);
     const { products, pagination } = paginateResults(groupedProducts, page, 12);
 
-    // Generate spoken summary of results if language provided
-    const { language = 'en', generateAudio = false } = req.body;
-    const summary = generateResultSummary(allProducts, language);
+    const summary = generateResultSummary(allItems, language);
 
     let audio = null;
     if (generateAudio && summary) {

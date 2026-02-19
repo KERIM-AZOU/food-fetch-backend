@@ -12,7 +12,7 @@
 { "term": "pizza", "region": "turkey" }
 ```
 
-Available regions: `qatar` (snoonu, rafeeq, talabat), `turkey` (yemeksepeti)
+Available regions: `qatar` (snoonu, rafeeq, talabat), `turkey` (tgoyemek)
 
 Each region has default lat/lon. You can still override with `lat` and `lon`.
 
@@ -79,3 +79,45 @@ When the user mentions food, the chat response is now:
 ## 6. Chat provider is swappable
 
 Backend now supports swapping between Groq and OpenAI for chat (like TTS and transcription). No frontend changes needed.
+
+## 7. Turkey region — what the frontend needs to handle
+
+Turkey uses **tgoyemek** as its platform. The search response is the same format as Qatar (products, not restaurants), so **no special rendering needed**.
+
+Key differences when `region: "turkey"`:
+
+- **Prices are in TL (Turkish Lira)**, not QAR. Display currency accordingly.
+- **ETA format is Turkish**: e.g. `"30-40dk"` instead of `"30 mins"`.
+- **Product URLs** point to `tgoyemek.com`: e.g. `https://tgoyemek.com/restoranlar/1624#pizza`
+- **Source** field is `"tgoyemek"` instead of `"Snoonu"` / `"Talabat"` / `"Rafeeq"`.
+- **`platforms` param is removed** — backend always uses the region's platforms automatically.
+
+Example request:
+```json
+{
+  "term": "pizza",
+  "region": "turkey",
+  "language": "tr",
+  "generateAudio": true
+}
+```
+
+Example product in response:
+```json
+{
+  "product_name": "Orta Boy Pizza Fırsatı",
+  "product_price": 450,
+  "product_image": "https://cdn.tgoapps.com/...",
+  "product_url": "https://tgoyemek.com/restoranlar/1624#trendyol-ozel-menu",
+  "restaurant_name": "PizzaLazza (Mecidiyeköy)",
+  "restaurant_eta": "30-40dk",
+  "source": "tgoyemek"
+}
+```
+
+### Frontend checklist for Turkey support:
+- [ ] Add region selector (Qatar / Turkey)
+- [ ] Pass `region: "turkey"` in search requests when Turkey is selected
+- [ ] Show TL currency symbol for Turkey products
+- [ ] Handle Turkish ETA format (`dk` = dakika = minutes)
+- [ ] No need to handle `platforms` param anymore — removed from API
