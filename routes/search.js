@@ -46,7 +46,6 @@ router.post('/', async (req, res) => {
     lon,
     sort = 'price',
     page = 1,
-    platforms,
     price_min,
     price_max,
     time_min,
@@ -63,7 +62,7 @@ router.post('/', async (req, res) => {
   const regionConfig = REGIONS[region] || REGIONS.qatar;
   const searchLat = lat || regionConfig.lat;
   const searchLon = lon || regionConfig.lon;
-  const searchPlatforms = platforms || regionConfig.platforms;
+  const searchPlatforms = regionConfig.platforms;
 
   try {
     // Fetch from selected platforms in parallel
@@ -88,8 +87,7 @@ router.post('/', async (req, res) => {
       price_max,
       time_min,
       time_max,
-      restaurant_filter,
-      platforms: searchPlatforms
+      restaurant_filter
     });
 
     // Group products by similarity
