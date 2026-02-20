@@ -39,7 +39,7 @@ function parseAIResponse(text) {
   try {
     const parsed = JSON.parse(text);
     return {
-      response: parsed.response || text,
+      response: parsed.response ?? '',
       foodMentioned: parsed.foodMentioned || false,
       foodItems: parsed.foodItems || [],
       shouldSearch: parsed.shouldSearch || false,
@@ -51,7 +51,7 @@ function parseAIResponse(text) {
       try {
         const parsed = JSON.parse(jsonMatch[0]);
         return {
-          response: parsed.response || text,
+          response: parsed.response ?? '',
           foodMentioned: parsed.foodMentioned || false,
           foodItems: parsed.foodItems || [],
           shouldSearch: parsed.shouldSearch || false,
@@ -62,8 +62,9 @@ function parseAIResponse(text) {
       }
     }
 
+    // Couldn't parse JSON at all — return empty response so TTS stays silent
     return {
-      response: text,
+      response: '',
       foodMentioned: false,
       foodItems: [],
       shouldSearch: false,

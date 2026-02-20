@@ -103,12 +103,14 @@ router.post('/', async (req, res) => {
       conversation.history = conversation.history.slice(-20);
     }
 
-    // Generate TTS audio if requested
+    // Generate TTS audio if requested — skip if empty or raw JSON
     let audio = null;
-    if (generateAudio && result.response) {
+    const ttsText = result.response?.trim();
+    const looksLikeJson = ttsText?.startsWith('{') || ttsText?.startsWith('[');
+    if (generateAudio && ttsText && !looksLikeJson) {
       stepStart = Date.now();
       try {
-        audio = await textToSpeech(result.response);
+        audio = await textToSpeech(ttsText);
       } catch (ttsError) {
         console.error('TTS error:', ttsError.message);
         // Continue without audio
@@ -251,11 +253,15 @@ router.post('/audio', async (req, res) => {
       conversation.history = conversation.history.slice(-20);
     }
 
-    // Generate TTS
+    // Generate TTS — skip if empty or looks like raw JSON
     stepStart = Date.now();
     let audioResponse = null;
+    const ttsText = result.response?.trim();
+    const looksLikeJson = ttsText?.startsWith('{') || ttsText?.startsWith('[');
     try {
-      audioResponse = await textToSpeech(result.response);
+      if (ttsText && !looksLikeJson) {
+        audioResponse = await textToSpeech(ttsText);
+      }
     } catch (ttsError) {
       console.error('TTS error:', ttsError.message);
     }
