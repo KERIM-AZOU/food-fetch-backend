@@ -22,8 +22,8 @@ async function textToSpeech(text) {
   return ttsProvider.synthesize(text);
 }
 
-async function transcribeAudio(audioBase64, mimeType) {
-  return transcriptionProvider.transcribe(audioBase64, mimeType);
+async function transcribeAudio(audioBase64, mimeType, languageHint) {
+  return transcriptionProvider.transcribe(audioBase64, mimeType, languageHint);
 }
 
 async function chat(userMessage, language = 'en') {
@@ -138,13 +138,13 @@ router.post('/', async (req, res) => {
  * Body: { sessionId?: string, generateAudio?: boolean }
  */
 router.post('/start', async (req, res) => {
-  const { sessionId = `session_${Date.now()}_${Math.random().toString(36).slice(2)}`, generateAudio = true } = req.body;
+  const { sessionId = `session_${Date.now()}_${Math.random().toString(36).slice(2)}`, generateAudio = true, language = 'ar' } = req.body;
 
   try {
     const routeStart = Date.now();
 
-    // Always greet in Arabic (Saudi market)
-    const result = generateGreeting('ar');
+    // Greet in the frontend's selected language (defaults to Arabic)
+    const result = generateGreeting(language);
     console.log(`[TIMING] /chat/start greeting — ${Date.now() - routeStart}ms`);
 
     // Initialize conversation
@@ -186,7 +186,7 @@ router.post('/start', async (req, res) => {
  * Body: { audio: string (base64), mimeType: string, sessionId?: string }
  */
 router.post('/audio', async (req, res) => {
-  const { audio, mimeType = 'audio/webm', sessionId = 'default' } = req.body;
+  const { audio, mimeType = 'audio/webm', sessionId = 'default', language } = req.body;
 
   if (!audio) {
     return res.status(400).json({ error: 'Audio data is required' });
@@ -196,19 +196,19 @@ router.post('/audio', async (req, res) => {
     const routeStart = Date.now();
     console.log(`Received audio: ${audio.length} chars base64, type: ${mimeType}`);
 
-    // Transcribe audio — language is auto-detected by Whisper
+    // Transcribe audio — use frontend language as hint, fall back to Whisper auto-detect
     let stepStart = Date.now();
     let transcriptionResult;
     try {
-      transcriptionResult = await transcribeAudio(audio, mimeType);
+      transcriptionResult = await transcribeAudio(audio, mimeType, language);
     } catch (err) {
       console.error('Transcription error details:', JSON.stringify(err.response?.data || err.message));
       throw err;
     }
     const transcript = transcriptionResult?.text || '';
-    const detectedLanguage = transcriptionResult?.language || 'en';
+    const detectedLanguage = language || transcriptionResult?.language || 'en';
     console.log(`[TIMING] /chat/audio transcribe — ${Date.now() - stepStart}ms`);
-    console.log('Transcribed:', transcript, 'Language:', detectedLanguage);
+    console.log('Transcribed:', transcript, 'Language:', detectedLanguage, '(hint:', language || 'none', ')');
 
     if (!transcript.trim()) {
       return res.json({
@@ -265,6 +265,7 @@ router.post('/audio', async (req, res) => {
     res.json({
       response: result.response,
       transcript,
+      language: detectedLanguage,
       foodMentioned: result.foodMentioned,
       foodItems: foodItems,
       shouldSearch: result.shouldSearch,

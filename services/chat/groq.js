@@ -8,20 +8,22 @@ const GROQ_MODEL = 'llama-3.3-70b-versatile';
  * Latency: ~200ms | Quality: good | Cost: free tier available
  * Very fast inference, good for real-time conversations
  */
-async function chat(messages) {
+async function chat(messages, { json = true } = {}) {
   if (!GROQ_API_KEY) throw new Error('GROQ_API_KEY not configured');
 
   const start = Date.now();
   console.log('[TIMING] Groq chat — request started');
+  const body = {
+    model: GROQ_MODEL,
+    messages,
+    temperature: 0.7,
+    max_tokens: 150
+  };
+  if (json) body.response_format = { type: 'json_object' };
+
   const result = await axios.post(
     'https://api.groq.com/openai/v1/chat/completions',
-    {
-      model: GROQ_MODEL,
-      messages,
-      temperature: 0.7,
-      max_tokens: 150,
-      response_format: { type: 'json_object' }
-    },
+    body,
     {
       headers: {
         'Authorization': `Bearer ${GROQ_API_KEY}`,

@@ -10,7 +10,8 @@ const {
   paginateResults,
   getAllRestaurants
 } = require('../utils/comparison');
-const { generateResultSummary } = require('../services/chatService');
+const { buildSummaryPrompt } = require('../services/chatService');
+const chatProvider = require('../services/chat/groq');
 
 // ── TTS provider (same as chat route) ──
 const ttsProvider = require('../services/tts/elevenlabs');
@@ -93,7 +94,22 @@ router.post('/', async (req, res) => {
     const groupedProducts = groupProductsBySimilarity(allItems, sort);
     const { products, pagination } = paginateResults(groupedProducts, page, 12);
 
-    const summary = generateResultSummary(allItems, language);
+    // Generate AI-translated summary
+    const summaryData = buildSummaryPrompt(products, language);
+    let summary = '';
+    if (summaryData.done) {
+      summary = summaryData.text;
+    } else {
+      try {
+        const stepStart = Date.now();
+        summary = await chatProvider.chat([
+          { role: 'user', content: summaryData.prompt }
+        ], { json: false });
+        console.log(`[TIMING] Summary AI — ${Date.now() - stepStart}ms`);
+      } catch (err) {
+        console.error('Summary AI error:', err.message);
+      }
+    }
 
     let audio = null;
     if (generateAudio && summary) {

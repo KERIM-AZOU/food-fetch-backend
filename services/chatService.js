@@ -106,10 +106,10 @@ function generateGreeting(language = 'en') {
 }
 
 /**
- * Generate a spoken summary of search results
- * Reads the first product: name, platform, price
+ * Build a prompt for the AI to generate a spoken search summary
+ * Fully translated in the target language, including food names
  */
-function generateResultSummary(products, language = 'en') {
+function buildSummaryPrompt(products, language = 'en') {
   if (!products || products.length === 0) {
     const noResults = {
       ar: 'ما لقيت شي، جرب شي ثاني؟',
@@ -117,43 +117,31 @@ function generateResultSummary(products, language = 'en') {
       fr: 'Je n\'ai rien trouvé, essaie autre chose ?',
       es: 'No encontré nada, ¿pruebas otra cosa?',
     };
-    return noResults[language] || 'No results found, try something else?';
+    return { done: true, text: noResults[language] || 'No results found, try something else?' };
   }
 
   const first = products[0];
   const name = first.product_name || '';
-  const source = first.source || '';
-  const price = first.product_price;
-  const count = products.length;
+  // Grouped products have variants array, flat products have source directly
+  const lowestVariant = first.variants?.find(v => v.is_lowest) || first.variants?.[0];
+  const source = lowestVariant?.source || first.source || '';
+  const price = first.lowest_price || lowestVariant?.price || first.product_price;
 
-  // Get unique platforms
-  const platforms = [...new Set(products.map(p => p.source))].join(', ');
+  const dialectNote = language === 'ar'
+    ? 'You MUST speak in casual Gulf Arabic (خليجي) like: لقيت، عندي، من. NOT formal Arabic (لا تستخدم العربية الفصحى).'
+    : '';
 
-  if (language === 'ar') {
-    const priceText = price ? ` بسعر ${price}` : '';
-    return `لقيت ${name}${priceText} من ${source}، عندي ${count} نتيجة من ${platforms}`;
-  }
-  if (language === 'tr') {
-    const priceText = price ? ` ${price} TL` : '';
-    return `${name} buldum${priceText}, ${source}'da. ${count} sonuç var, ${platforms} üzerinden`;
-  }
-  if (language === 'fr') {
-    const priceText = price ? ` à ${price}` : '';
-    return `J'ai trouvé ${name}${priceText} sur ${source}. ${count} résultats sur ${platforms}`;
-  }
-  if (language === 'es') {
-    const priceText = price ? ` por ${price}` : '';
-    return `Encontré ${name}${priceText} en ${source}. ${count} resultados en ${platforms}`;
-  }
+  const prompt = `Say this as a short casual spoken announcement in language "${language}". ${dialectNote}
+Translate the food name naturally to ${language}. NEVER translate the platform name "${source}" — say it exactly as "${source}". One short sentence. No quotes. Just announce the best deal found.
 
-  // Default: English
-  const priceText = price ? ` for ${price}` : '';
-  return `Found ${name}${priceText} on ${source}. ${count} results from ${platforms}`;
+Info: "${name}" costs ${price || 'N/A'}, from ${source}.`;
+
+  return { done: false, prompt };
 }
 
 module.exports = {
   buildMessages,
   parseAIResponse,
   generateGreeting,
-  generateResultSummary
+  buildSummaryPrompt
 };

@@ -34,7 +34,7 @@ function normalizeLanguage(lang) {
  * OpenAI Whisper transcription (whisper-1)
  * Latency: ~2s | Quality: excellent | Cost: $0.006/min
  */
-async function transcribe(audioBase64, mimeType = 'audio/webm') {
+async function transcribe(audioBase64, mimeType = 'audio/webm', languageHint) {
   if (!OPENAI_API_KEY) throw new Error('OPENAI_API_KEY not configured');
 
   const audioBuffer = Buffer.from(audioBase64, 'base64');
@@ -44,7 +44,10 @@ async function transcribe(audioBase64, mimeType = 'audio/webm') {
   form.append('file', audioBuffer, { filename: `audio.${ext}`, contentType: mimeType });
   form.append('model', 'whisper-1');
   form.append('response_format', 'verbose_json');
-  // No language hint — let Whisper auto-detect
+  // Use frontend language as hint for better transcription accuracy
+  if (languageHint) {
+    form.append('language', languageHint);
+  }
 
   const start = Date.now();
   const response = await axios.post(
