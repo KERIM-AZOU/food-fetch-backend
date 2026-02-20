@@ -18,7 +18,7 @@ const DEFAULT_VOICE = 'EXAVITQu4vr4xnSDxMaL'; // Bella
  * Latency: ~1-2s | Quality: excellent | Cost: ~$0.30/1K chars
  * Best multilingual quality, especially Arabic
  */
-async function synthesize(text, { voice = DEFAULT_VOICE, stability = 0.4, similarity_boost = 0.75, style = 0.6 } = {}) {
+async function synthesize(text, { voice = DEFAULT_VOICE, stability = 0.75, similarity_boost = 0.75, style = 0 } = {}) {
   if (!ELEVENLABS_API_KEY) return null;
 
   try {

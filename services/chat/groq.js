@@ -8,7 +8,7 @@ const GROQ_MODEL = 'llama-3.3-70b-versatile';
  * Latency: ~200ms | Quality: good | Cost: free tier available
  * Very fast inference, good for real-time conversations
  */
-async function chat(messages, { json = true } = {}) {
+async function chat(messages, { json = true, maxTokens = 150 } = {}) {
   if (!GROQ_API_KEY) throw new Error('GROQ_API_KEY not configured');
 
   const start = Date.now();
@@ -17,7 +17,7 @@ async function chat(messages, { json = true } = {}) {
     model: GROQ_MODEL,
     messages,
     temperature: 0.7,
-    max_tokens: 150
+    max_tokens: maxTokens
   };
   if (json) body.response_format = { type: 'json_object' };
 

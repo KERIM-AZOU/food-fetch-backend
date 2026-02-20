@@ -104,7 +104,7 @@ router.post('/', async (req, res) => {
         const stepStart = Date.now();
         summary = await chatProvider.chat([
           { role: 'user', content: summaryData.prompt }
-        ], { json: false });
+        ], { json: false, maxTokens: 60 });
         console.log(`[TIMING] Summary AI — ${Date.now() - stepStart}ms`);
       } catch (err) {
         console.error('Summary AI error:', err.message);
